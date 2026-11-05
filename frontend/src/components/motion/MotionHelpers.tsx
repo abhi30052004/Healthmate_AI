@@ -111,9 +111,16 @@ export function AnimatedNumber({
   );
 }
 
-export function PageTransition({ children }: { children: React.ReactNode }) {
+export function PageTransition({
+  children,
+  routeKey,
+}: {
+  children: React.ReactNode;
+  routeKey?: string;
+}) {
   return (
     <motion.div
+      key={routeKey}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
