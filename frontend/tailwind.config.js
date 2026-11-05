@@ -7,22 +7,32 @@ export default {
   theme: {
     extend: {
       colors: {
+        green: {
+          50: "var(--green-50)",
+          100: "var(--green-100)",
+          500: "var(--green-500)",
+          600: "var(--green-600)",
+          700: "var(--green-700)",
+          800: "var(--green-800)",
+          900: "var(--green-900)",
+        },
         brand: {
           900: "var(--green-900)",
-          800: "var(--green-800)", // Primary
-          700: "var(--green-700)", // Active nav / links
-          600: "var(--green-600)", // Accent / verified
+          800: "var(--green-800)",
+          700: "var(--green-700)",
+          600: "var(--green-600)",
           500: "var(--green-500)",
-          100: "var(--green-100)", // Chips / tints
-          50: "var(--green-50)",   // Section tint
+          100: "var(--green-100)",
+          50: "var(--green-50)",
         },
-        bg: "var(--bg)",
         surface: "var(--surface)",
+        bg: "var(--bg)",
         border: "var(--border)",
         text: {
           DEFAULT: "var(--text)",
           muted: "var(--muted)",
         },
+        muted: "var(--muted)",
         warning: {
           DEFAULT: "var(--warning)",
           bg: "var(--warning-bg)",
@@ -37,8 +47,8 @@ export default {
         },
       },
       fontFamily: {
-        sans: ["var(--font-sans)", "Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
-        display: ["var(--font-display)", "Plus Jakarta Sans", "Inter", "sans-serif"],
+        sans: ["Inter", "system-ui", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+        display: ["Plus Jakarta Sans", "Inter", "system-ui", "sans-serif"],
       },
       borderRadius: {
         sm: "var(--radius-sm)",
@@ -49,6 +59,8 @@ export default {
       boxShadow: {
         1: "var(--shadow-1)",
         2: "var(--shadow-2)",
+        card: "var(--shadow-1)",
+        raised: "var(--shadow-2)",
       },
       transitionTimingFunction: {
         out: "cubic-bezier(0.22, 1, 0.36, 1)",

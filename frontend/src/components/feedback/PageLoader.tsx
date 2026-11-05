@@ -40,3 +40,4 @@ export function PageLoader() {
     </motion.div>
   );
 }
+

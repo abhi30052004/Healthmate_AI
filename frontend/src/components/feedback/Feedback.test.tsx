@@ -64,3 +64,4 @@ describe("Step 3 - Loading, Feedback & Error States", () => {
     expect(screen.getByText(/Waking up the server/i)).toBeDefined();
   });
 });
+

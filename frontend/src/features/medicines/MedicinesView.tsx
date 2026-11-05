@@ -365,3 +365,4 @@ export function MedicinesView({ token, activeProfile }: MedicinesViewProps) {
     </div>
   );
 }
+

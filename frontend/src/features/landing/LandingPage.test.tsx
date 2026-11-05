@@ -94,3 +94,4 @@ describe("Step 12 - Public Landing Page (All 15 Sections)", () => {
     ).toBeGreaterThanOrEqual(1);
   });
 });
+

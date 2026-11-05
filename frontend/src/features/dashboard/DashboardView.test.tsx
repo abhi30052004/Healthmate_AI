@@ -110,3 +110,4 @@ describe("Step 6 - Rebuilt Clinical Dashboard", () => {
     expect(screen.getByText(/standard reference range on both comparative reports/i)).toBeDefined();
   });
 });
+

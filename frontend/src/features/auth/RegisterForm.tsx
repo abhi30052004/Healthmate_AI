@@ -354,3 +354,4 @@ export function RegisterForm({ onSuccess, onNavigateLogin }: RegisterFormProps) 
     </div>
   );
 }
+

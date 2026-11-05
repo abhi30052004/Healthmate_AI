@@ -32,3 +32,4 @@ export const shake = {
   x: [0, -8, 8, -6, 6, -3, 3, 0],
   transition: { duration: 0.4 },
 };
+

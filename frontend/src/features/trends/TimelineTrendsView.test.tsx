@@ -63,3 +63,4 @@ describe("Step 8 - Interactive Medical Trends & Accessible Charts", () => {
     expect(screen.getByText("Total Serum Cholesterol")).toBeDefined();
   });
 });
+

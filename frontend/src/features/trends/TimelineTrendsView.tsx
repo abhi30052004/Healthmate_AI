@@ -161,3 +161,4 @@ export function TimelineTrendsView({ token, activeProfile }: TimelineTrendsViewP
     </div>
   );
 }
+
