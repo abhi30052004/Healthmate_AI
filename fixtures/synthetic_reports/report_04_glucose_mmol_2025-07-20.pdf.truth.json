@@ -1,0 +1,17 @@
+{
+  "file": "report_04_glucose_mmol_2025-07-20.pdf",
+  "observations": [
+    {
+      "test_name": "Fasting Glucose",
+      "value": "5.4",
+      "unit": "mmol/L",
+      "reference_range": "3.9-6.1"
+    },
+    {
+      "test_name": "HbA1c",
+      "value": "5.5",
+      "unit": "%",
+      "reference_range": "4.0-5.6"
+    }
+  ]
+}

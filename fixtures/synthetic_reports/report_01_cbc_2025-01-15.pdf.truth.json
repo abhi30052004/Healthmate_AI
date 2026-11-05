@@ -1,0 +1,29 @@
+{
+  "file": "report_01_cbc_2025-01-15.pdf",
+  "observations": [
+    {
+      "test_name": "Hemoglobin",
+      "value": "13.2",
+      "unit": "g/dL",
+      "reference_range": "13.5-17.5"
+    },
+    {
+      "test_name": "WBC",
+      "value": "6.8",
+      "unit": "10^3/uL",
+      "reference_range": "4.0-11.0"
+    },
+    {
+      "test_name": "Platelets",
+      "value": "245",
+      "unit": "10^3/uL",
+      "reference_range": "150-450"
+    },
+    {
+      "test_name": "Hematocrit",
+      "value": "40.1",
+      "unit": "%",
+      "reference_range": "41-53"
+    }
+  ]
+}

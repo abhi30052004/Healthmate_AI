@@ -1,0 +1,29 @@
+{
+  "file": "report_02_lipid_2025-03-10.pdf",
+  "observations": [
+    {
+      "test_name": "Total Cholesterol",
+      "value": "215",
+      "unit": "mg/dL",
+      "reference_range": "< 200"
+    },
+    {
+      "test_name": "LDL Cholesterol",
+      "value": "130",
+      "unit": "mg/dL",
+      "reference_range": "< 100"
+    },
+    {
+      "test_name": "HDL Cholesterol",
+      "value": "50",
+      "unit": "mg/dL",
+      "reference_range": "> 40"
+    },
+    {
+      "test_name": "Triglycerides",
+      "value": "140",
+      "unit": "mg/dL",
+      "reference_range": "< 150"
+    }
+  ]
+}
