@@ -1,0 +1,117 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-family: var(--font-sans);
+    color: var(--text);
+    background-color: var(--bg);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-size: 16px;
+    line-height: 1.5;
+    background-color: var(--bg);
+    color: var(--text);
+  }
+
+  /* Simple Mode for elders/accessibility (Section 5) */
+  body.mode-simple {
+    font-size: 20px;
+    line-height: 1.6;
+  }
+
+  body.mode-simple h1 {
+    font-size: 2.25rem;
+  }
+
+  body.mode-simple h2 {
+    font-size: 1.75rem;
+  }
+
+  body.mode-simple h3 {
+    font-size: 1.5rem;
+  }
+
+  body.mode-simple button,
+  body.mode-simple a,
+  body.mode-simple input {
+    min-height: 52px;
+  }
+
+  /* Headings typography */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    font-weight: 650;
+    color: var(--text);
+    margin-top: 0;
+    letter-spacing: -0.02em;
+  }
+
+  h1 {
+    font-size: 2rem; /* 32px */
+    line-height: 1.25;
+  }
+
+  h2 {
+    font-size: 1.5rem; /* 24px */
+    line-height: 1.3;
+  }
+
+  h3 {
+    font-size: 1.25rem; /* 20px */
+    line-height: 1.35;
+  }
+
+  /* Tabular figures for vitals and numerical measurements */
+  .tabular-numbers,
+  .metric-value,
+  [data-numeric="true"] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Accessible focus rings */
+  :focus-visible {
+    outline: none;
+    box-shadow: var(--focus);
+  }
+
+  /* Buttons & interactive touch targets */
+  button, [role="button"], input, select, textarea {
+    min-height: 44px;
+    font-family: inherit;
+  }
+
+  /* Compact controls exception (e.g. dense table pagination) */
+  .touch-compact {
+    min-height: 32px;
+  }
+}
+
+@layer utilities {
+  .bg-gradient-hero {
+    background: linear-gradient(180deg, var(--green-50) 0%, #ffffff 100%);
+  }
+
+  .bg-brand-mesh {
+    background-color: var(--green-900);
+    background-image: 
+      radial-gradient(at 10% 20%, rgba(46, 155, 121, 0.4) 0px, transparent 50%),
+      radial-gradient(at 80% 80%, rgba(7, 91, 99, 0.5) 0px, transparent 50%);
+  }
+
+  .text-tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}

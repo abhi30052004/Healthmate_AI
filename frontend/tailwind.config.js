@@ -7,65 +7,53 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: {
-          DEFAULT: "#0D9488", // Deep Teal
-          hover: "#0F766E",
-          active: "#115E59",
-          light: "#F0FDFA",
-          border: "#CCFBF1",
+        brand: {
+          900: "var(--green-900)",
+          800: "var(--green-800)", // Primary
+          700: "var(--green-700)", // Active nav / links
+          600: "var(--green-600)", // Accent / verified
+          500: "var(--green-500)",
+          100: "var(--green-100)", // Chips / tints
+          50: "var(--green-50)",   // Section tint
         },
-        secondary: {
-          DEFAULT: "#0284C7", // Medical Blue
-          hover: "#0369A1",
-          light: "#F0F9FF",
+        bg: "var(--bg)",
+        surface: "var(--surface)",
+        border: "var(--border)",
+        text: {
+          DEFAULT: "var(--text)",
+          muted: "var(--muted)",
         },
-        positive: {
-          DEFAULT: "#10B981", // Subtle Green
-          light: "#ECFDF5",
-          dark: "#065F46",
+        warning: {
+          DEFAULT: "var(--warning)",
+          bg: "var(--warning-bg)",
         },
-        bgWarm: "#F7F9FA",
-        surface: {
-          DEFAULT: "#FFFFFF",
-          subtle: "#F1F5F9",
+        danger: {
+          DEFAULT: "var(--danger)",
+          bg: "var(--danger-bg)",
         },
-        semantic: {
-          normal: "#10B981",
-          high: "#EF4444",
-          low: "#F59E0B",
-          pending: "#64748B",
+        info: {
+          DEFAULT: "var(--info)",
+          bg: "var(--info-bg)",
         },
       },
       fontFamily: {
-        sans: [
-          "-apple-system",
-          "BlinkMacSystemFont",
-          "Inter",
-          "Segoe UI",
-          "Roboto",
-          "Helvetica",
-          "Arial",
-          "sans-serif",
-        ],
+        sans: ["var(--font-sans)", "Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+        display: ["var(--font-display)", "Plus Jakarta Sans", "Inter", "sans-serif"],
       },
       borderRadius: {
-        sm: "8px",
-        md: "12px",
-        lg: "16px",
-        xl: "20px",
+        sm: "var(--radius-sm)",
+        DEFAULT: "var(--radius)",
+        lg: "var(--radius-lg)",
+        xl: "var(--radius-xl)",
       },
       boxShadow: {
-        subtle: "0 1px 2px 0 rgba(15, 23, 42, 0.04)",
-        card: "0 4px 6px -1px rgba(15, 23, 42, 0.05), 0 2px 4px -2px rgba(15, 23, 42, 0.03)",
-        hover: "0 12px 24px -6px rgba(15, 23, 42, 0.08), 0 4px 8px -4px rgba(15, 23, 42, 0.03)",
-        float: "0 20px 35px -10px rgba(15, 23, 42, 0.12), 0 8px 16px -6px rgba(15, 23, 42, 0.04)",
+        1: "var(--shadow-1)",
+        2: "var(--shadow-2)",
       },
       transitionTimingFunction: {
-        smooth: "cubic-bezier(0.16, 1, 0.3, 1)",
-        spring: "cubic-bezier(0.34, 1.56, 0.64, 1)",
+        out: "cubic-bezier(0.22, 1, 0.36, 1)",
       },
     },
   },
   plugins: [],
 };
-

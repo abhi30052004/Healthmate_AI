@@ -1,0 +1,55 @@
+:root {
+  /* Brand Palette (Green + White identity) */
+  --green-900: #053F44;
+  --green-800: #075B63;   /* Primary */
+  --green-700: #087A83;   /* Active nav, links */
+  --green-600: #2E9B79;   /* Accent / verified */
+  --green-500: #43B58F;
+  --green-100: #DDF3EA;   /* Tints, chips */
+  --green-50:  #EEF8F4;   /* Section tint */
+
+  /* Neutrals */
+  --bg:        #F5F8F8;
+  --surface:   #FFFFFF;
+  --border:    #DCE6E7;
+  --text:      #172B32;
+  --muted:     #647780;
+
+  /* Status */
+  --warning:    #A96513;
+  --warning-bg: #FFF3E0;
+  --danger:     #B42332;
+  --danger-bg:  #FDECEE;
+  --info:       #2563EB;
+  --info-bg:    #E8F0FE;
+
+  /* Shape and Depth */
+  --radius-sm: 8px;
+  --radius:    12px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --shadow-1:  0 1px 2px rgba(7, 91, 99, 0.06), 0 1px 1px rgba(7, 91, 99, 0.04);
+  --shadow-2:  0 8px 24px rgba(7, 91, 99, 0.10);
+  --focus:     0 0 0 3px rgba(46, 155, 121, 0.35);
+
+  /* Fonts */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Plus Jakarta Sans", var(--font-sans);
+
+  /* Spacing Scale (4px base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-24: 96px;
+
+  /* Motion Tokens */
+  --duration-fast: 0.15s;
+  --duration-base: 0.25s;
+  --duration-slow: 0.5s;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
