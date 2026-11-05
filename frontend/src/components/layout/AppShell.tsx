@@ -10,12 +10,14 @@ export interface AppShellProps {
   user: User | null;
   activeProfile: FamilyProfile | null;
   profiles: FamilyProfile[];
-  activeTab: NavTabId;
+  activeTab?: NavTabId;
+  currentTab?: NavTabId;
   onTabChange: (tab: NavTabId) => void;
   onSelectProfile: (profile: FamilyProfile) => void;
   onLogout?: () => void;
   isNavigating?: boolean;
   children: React.ReactNode;
+  simpleMode?: boolean;
 }
 
 export function AppShell({
@@ -23,19 +25,24 @@ export function AppShell({
   activeProfile,
   profiles,
   activeTab,
+  currentTab,
   onTabChange,
   onSelectProfile,
   onLogout,
   isNavigating = false,
   children,
+  simpleMode: simpleModeProp,
 }: AppShellProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [simpleMode, setSimpleMode] = useState(false);
+  const [simpleModeInternal, setSimpleModeInternal] = useState(false);
+
+  const simpleMode = simpleModeProp !== undefined ? simpleModeProp : simpleModeInternal;
+  const effectiveTab = activeTab || currentTab || "overview";
 
   const toggleSimpleMode = () => {
     const next = !simpleMode;
-    setSimpleMode(next);
+    setSimpleModeInternal(next);
     if (next) {
       document.body.classList.add("mode-simple");
     } else {
@@ -70,7 +77,7 @@ export function AppShell({
 
       {/* Desktop Collapsible Sidebar */}
       <Sidebar
-        activeTab={activeTab}
+        activeTab={effectiveTab}
         onTabChange={onTabChange}
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
@@ -98,7 +105,7 @@ export function AppShell({
 
       {/* Mobile Bottom Navigation */}
       <MobileNav
-        activeTab={activeTab}
+        activeTab={effectiveTab}
         onTabChange={onTabChange}
         onOpenMore={() => setMobileMenuOpen(true)}
         simpleMode={simpleMode}

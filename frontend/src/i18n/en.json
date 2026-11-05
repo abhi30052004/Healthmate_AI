@@ -1,0 +1,40 @@
+{
+  "app": {
+    "title": "HealthMate AI",
+    "tagline": "Calm, trustworthy family health organizer",
+    "safetyNotice": "HealthMate AI explains records and supports doctor conversations. It never diagnoses or prescribes."
+  },
+  "nav": {
+    "overview": "Overview",
+    "records": "Health Records",
+    "trends": "Timeline & Trends",
+    "medicines": "Medicines",
+    "appointments": "Appointments",
+    "symptoms": "Symptoms",
+    "doctorPack": "Doctor Visit Pack",
+    "assistant": "AI Assistant",
+    "family": "Family",
+    "sharing": "Sharing & Emergency",
+    "privacy": "Privacy",
+    "settings": "Settings"
+  },
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "confirm": "Confirm",
+    "upload": "Upload Report",
+    "logVital": "Log Vital",
+    "markTaken": "Taken",
+    "skip": "Skip",
+    "snooze": "Snooze",
+    "generateQR": "Generate QR",
+    "revoke": "Revoke Access"
+  },
+  "simpleMode": {
+    "banner": "Simple Mode Active: Large 20px typography and simplified navigation.",
+    "medicinesTab": "My Medicines",
+    "recordsTab": "My Reports",
+    "doctorTab": "Doctor Visit Pack"
+  }
+}

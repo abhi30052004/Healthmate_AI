@@ -1,0 +1,18 @@
+{
+  "name": "HealthMate AI — Family Health Organizer",
+  "short_name": "HealthMate",
+  "description": "Upload medical reports, track longitudinal trends, manage family doses, and share records with doctors via time-limited QR.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F5F8F8",
+  "theme_color": "#075B63",
+  "orientation": "portrait-primary",
+  "categories": ["medical", "health", "productivity"],
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}
