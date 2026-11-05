@@ -55,7 +55,7 @@ const INITIAL_AUDIT_LOGS: AuditLogEntry[] = [
     timestamp: "03 Nov 2026, 09:30 AM",
     actor: "You (Web Client)",
     action: "Verified Extracted Lab Fact",
-    resource: "HbA1c 6.8% (Apollo Clinic Report)",
+    resource: "HbA1c 6.8% (Sample Diagnostics Lab Report)",
     status: "success",
     ipAddress: "152.58.112.44",
   },

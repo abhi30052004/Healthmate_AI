@@ -10,3 +10,4 @@ test("styles are applied", async ({ page }) => {
   const bg = await btn.evaluate((el) => getComputedStyle(el).backgroundColor);
   expect(bg).not.toBe("rgba(0, 0, 0, 0)");
 });
+

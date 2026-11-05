@@ -37,7 +37,7 @@ describe("Step 11 - AI Assistant, Family, Privacy & Settings", () => {
       const citationButton = screen.getByTitle(/Source \[S1\]/i);
       fireEvent.click(citationButton);
 
-      expect(screen.getAllByText("Metabolic & Glycemic Profile - Apollo Clinic").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("Metabolic & Glycemic Profile - Sample Diagnostics Lab").length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText(/Exact Source Excerpt/i)).toBeDefined();
     });
   });

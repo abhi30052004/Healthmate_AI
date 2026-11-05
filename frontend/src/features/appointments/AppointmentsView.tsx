@@ -47,7 +47,7 @@ export function AppointmentsView({
       specialty: "Consultant Endocrinologist",
       date: "Tuesday, 01 Dec 2026",
       time: "4:00 PM",
-      clinic: "Apollo Clinic, Care Wing B",
+      clinic: "Sample Health Clinic, Care Wing B",
       checklist: [
         { id: "c4", text: "Log 14-day morning blood glucose readings", done: true },
         { id: "c5", text: "Bring current Metformin medication list", done: false },

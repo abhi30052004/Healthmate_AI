@@ -45,7 +45,7 @@ const INITIAL_CHAT: ChatItem[] = [
       {
         id: "cit-1",
         sourceIndex: 1,
-        documentTitle: "Metabolic & Glycemic Profile - Apollo Clinic",
+        documentTitle: "Metabolic & Glycemic Profile - Sample Diagnostics Lab",
         pageNumber: 2,
         date: "14 Oct 2026",
         excerpt: "HbA1c (Glycosylated Hemoglobin): 6.8 % [Reference: 4.0 - 5.6 %] Method: HPLC",

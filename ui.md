@@ -1,296 +1,204 @@
-# HealthMate AI — Frontend (UI Design and Developer Guide)
+# HealthMate UI — Polish Pass and Modern React Upgrade
 
-React + TypeScript single-page app for HealthMate AI: landing page, animated login/register, and the full in-app experience (dashboard, records, trends, medicines, appointments, symptoms, Visit Pack, sharing, assistant, family, privacy, settings).
+Based on the screenshot of the landing page at `localhost:5173`.
 
-> **Safety statement (shown in the UI):** HealthMate AI explains records and supports doctor conversations. It never diagnoses or prescribes. All demo data is synthetic.
+## 1. Good news: styling now works
+Tailwind and the green/white tokens are being applied (coloured buttons, cards, spacing, badges). The earlier "no CSS" problem is fixed. What remains is **design quality** and **application architecture**.
 
-Save this file as `frontend/README.md`. Related docs: `UI_README.md` (design spec), `API.md`, `AUTH.md`, `AGENT_GUARDRAILS.md`.
+## 2. What the screenshot shows (issues, by priority)
 
----
+| # | Issue | Severity |
+|---|---|---|
+| 1 | **Final CTA headline is almost invisible** (dark text on the dark green panel). Needs white text. | Bug |
+| 2 | **Navbar is not visible at the top**; it appears mid-page in the capture. Likely a fixed/sticky nav in a full-page screenshot, but verify it shows at scroll position 0 and stays on top. | Check |
+| 3 | **No visual rhythm:** every section is the same white background with the same thin-border cards. Looks like a template wireframe. | High |
+| 4 | **"Bento" grid is not bento:** six identical equal cards, tiny icons, no imagery. | High |
+| 5 | **Hero lacks impact:** small mockup, lots of empty space, no gradient/mesh, no composition (dashboard + phone + chips). | High |
+| 6 | **Trend demo is almost empty:** a flat line in a grey box. Needs a real chart (area gradient, axis, tooltip, reference band, animated draw). | High |
+| 7 | **No product visuals:** sections describe features but show no real UI previews, illustrations or icons with depth. | High |
+| 8 | **Type scale is timid** for a landing page; headings and section titles are small relative to the page. | Medium |
+| 9 | **"How it works" steps** are four plain boxes with no connecting line or progress feel. | Medium |
+| 10 | **Content claims to review:** "High accuracy", "Zero monetization", "Complete user control", "Immutable audit logs" must be true before launch. A real brand name ("Apollo Clinic") appears in the demo; use a fictional lab name. | Content/legal |
+| 11 | **Jargon:** "Private & Strict Patient Data Sovereignty" and "Strict Evidence Match" read stiff. Use plain language. | Low |
 
-## 1. Quick start (Windows PowerShell)
+Note: the screenshot is scaled down, so things look smaller than they are. Still review at 1440 px and 390 px.
 
+## 3. "Modern React application" — what is probably missing
+
+I can't see `package.json`, but the build log suggests many pieces were hand-rolled (custom Tabs, Dialog, SVG chart, view switching in `App.tsx`). Check with `npm ls --depth=0`. A modern production React app normally has:
+
+| Area | Modern approach | Why |
+|---|---|---|
+| Routing | **React Router** with real URLs (`/login`, `/app/dashboard`, `/s/:token`), lazy routes, 404, route guards | Deep links, back button, shareable QR URLs, code splitting |
+| Server state | **TanStack Query** (cache, retries, loading/error states, invalidation on profile switch) | Replaces manual fetch state; profile-scoped cache keys |
+| Forms | **react-hook-form + zod** | Validation, accessibility, fewer bugs |
+| Primitives | **Radix UI** (Dialog, Tabs, Tooltip, Dropdown, Accordion, Switch) | Focus trap, ARIA, keyboard handling done right |
+| Class utilities | `clsx`, `tailwind-merge`, `class-variance-authority` | Clean component variants |
+| Charts | **Recharts** (or visx) | Tooltips, responsive, reference areas, animation |
+| Feedback | **sonner** toasts, error boundaries, `Suspense` fallbacks | Consistent UX |
+| Motion | `motion` with `whileInView`, `layoutId`, `AnimatePresence` | Scroll reveals and shared-element transitions |
+| Theming | CSS variables + optional dark mode | Polished feel |
+| Quality | ESLint, Prettier, Playwright + axe, `vite-plugin-pwa` | Reliability |
+
+Install (adjust to what you already have):
 ```powershell
 cd frontend
-npm install
-npm run dev          # http://localhost:5173
+npm i react-router-dom @tanstack/react-query react-hook-form zod @hookform/resolvers recharts sonner clsx tailwind-merge class-variance-authority lucide-react motion
+npm i @radix-ui/react-dialog @radix-ui/react-tabs @radix-ui/react-tooltip @radix-ui/react-dropdown-menu @radix-ui/react-accordion @radix-ui/react-switch
+npm i -D @playwright/test @axe-core/playwright vite-plugin-pwa
 ```
+Migrate gradually; don't rewrite what already works. Replace hand-rolled primitives with Radix-wrapped ones one at a time and keep the tests green.
 
-| Command | Purpose |
-|---|---|
-| `npm run dev` | Dev server with hot reload |
-| `npm run build` | Type-check (`tsc -b`) then production build to `dist/` |
-| `npm run preview` | Serve the production build locally |
-| `npm test` / `npx vitest run` | Unit and integration tests (jsdom) |
-| `npx vitest` | Watch mode |
-
-Check `package.json` for the exact script names in your repo.
-
-Requirements: Node 20+, npm 10+. The backend should run on `http://127.0.0.1:8000` (set the API base URL in `.env`, see section 12).
-
-## 2. Tech stack
-
-| Area | Choice |
-|---|---|
-| Framework | React 18, TypeScript, Vite 5 |
-| Styling | Tailwind CSS (v3 style config) + CSS variable design tokens |
-| Motion | `motion` / Framer Motion API (`MotionConfig reducedMotion="user"`) |
-| Icons | lucide-react |
-| Charts | Custom accessible SVG `TrendChart` (with table alternative) |
-| Tests | Vitest + Testing Library (jsdom) |
-| i18n | Lightweight context (`src/i18n`): English, Bengali, Hindi |
-| PWA | `public/manifest.json`, offline banner |
-| Fonts | Inter (body) and Plus Jakarta Sans (headings) with system fallbacks |
-
-## 3. Project structure
-
-```text
-frontend/
-  index.html
-  public/manifest.json
-  tailwind.config.js        postcss.config.js        vite.config.ts        tsconfig.json
-  src/
-    main.tsx                 App entry (imports CSS in the order shown in section 5)
-    App.tsx                  Top-level routing, auth gate, profile scope, view transitions
-    index.css                Tailwind directives
-    styles/
-      tokens.css             Colour, radius, shadow, focus variables (green + white)
-      globals.css            Base typography, tabular numbers, 44px tap targets, .mode-simple
-      motion.css             Shimmer, reduced-motion overrides
-    api/client.ts            Typed API client (kept from the original app)
-    services/authService.ts  Auth/session logic (kept)
-    components/
-      ui/                    Button, Input/PasswordInput, Card, Badge, Tabs, Dialog, Tooltip, Skeleton, Avatar
-      motion/                variants.ts, MotionHelpers (FadeIn, Reveal, Stagger, AnimatedNumber, PageTransition, AnimatedCheck)
-      feedback/              PageLoader, RouteProgress, States (Empty, Error, OfflineBanner, ColdStartBanner)
-      layout/                AppShell, Sidebar, Topbar, MobileNav, PageHeader, ProfileSwitcher
-      health/                StatCard, DoseCard, HealthCards, AIHealthComponents (citations, evidence, quota)
-    features/
-      landing/               LandingPageView (15 sections)
-      auth/                  AuthLayout, LoginForm, RegisterForm (3 steps)
-      dashboard/             DashboardView
-      records/               HealthRecordsView, FileDropzone, ExtractionReviewPanel
-      trends/                TimelineTrendsView, TrendChart
-      medicines/             MedicinesView
-      appointments/          AppointmentsView
-      symptoms/              SymptomsJournalView
-      visit-pack/            DoctorVisitPackView
-      sharing/               SharingEmergencyView, PublicDoctorPortalView
-      assistant/             AssistantView
-      family/                FamilyView
-      privacy/               PrivacyView
-      settings/              SettingsView
-      styleguide/            StyleGuidePage (token and component preview)
-    i18n/                    en.json, bn.json, hi.json, i18nContext.tsx
-```
-
-## 4. Design system
-
-### 4.1 Colour tokens (green + white)
-Defined in `src/styles/tokens.css` and exposed to Tailwind.
-
-| Token | Value | Use |
-|---|---|---|
-| `--green-900` | `#053F44` | Hover, brand panel |
-| `--green-800` | `#075B63` | **Primary** buttons, headings accents |
-| `--green-700` | `#087A83` | Active nav, links |
-| `--green-600` | `#2E9B79` | Verified, success accent |
-| `--green-500` | `#43B58F` | Highlights |
-| `--green-100` | `#DDF3EA` | Chips, tints |
-| `--green-50` | `#EEF8F4` | Section backgrounds |
-| `--bg` | `#F5F8F8` | App background |
-| `--surface` | `#FFFFFF` | Cards |
-| `--border` | `#DCE6E7` | Borders |
-| `--text` / `--muted` | `#172B32` / `#647780` | Text |
-| `--warning` / `--danger` / `--info` | `#A96513` / `#B42332` / `#2563EB` | Status (always with icon + text) |
-
-Rules: no hard-coded hex values in components; red only for errors; every colour pair meets WCAG AA; never rely on colour alone.
-
-### 4.2 Typography, spacing, shape
-Display 48-64, H1-H3 32/24/20, body 16 (Simple mode 20). Numbers use tabular figures. Spacing scale 4/8/12/16/24/32/48/64/96. Radius 8/12/20/28. Tap targets at least 44px.
-
-### 4.3 Layout
-- Breakpoints: 640 / 768 / 1024 / 1280 / 1536.
-- Desktop: sidebar (240px, collapsible) + topbar + content (max 1280px; reading width 720px).
-- Mobile: topbar + bottom nav (Home, Records, Medicines, Assistant, More).
-- Active profile is always visible in the topbar; switching profile clears profile-scoped data.
-
-### 4.4 Motion
-| Token | Value |
-|---|---|
-| Durations | 0.15 s / 0.25 s / 0.5 s |
-| Ease | `[0.22, 1, 0.36, 1]` |
-| Stagger | 0.06 s (max 8 items) |
-
-Where it appears: page transitions, staggered card entrance, sidebar active pill, dose "Taken" collapse + check, chart line draw, dialogs/toasts, upload stages, landing scroll reveals and floating hero cards, login shake on error, register step slide.
-Rules: only animate `transform` and `opacity`; respect reduced motion; never hide a real medical value behind an animation.
-
-### 4.5 Loading and feedback
-`PageLoader` (heartbeat line splash, min 400 ms, max 3 s), `RouteProgress` (3px top bar), skeleton shimmer, `EmptyState`, `ErrorState`, `OfflineBanner`, `ColdStartBanner` ("Waking up the server, this can take up to a minute").
-
-## 5. Tailwind and CSS setup (read this if the UI looks unstyled)
-
-If the built CSS file is tiny (a few kB), Tailwind is not generating utilities.
-
-**Import order in `src/main.tsx`:**
+## 4. Route structure (target)
 ```tsx
-import "./styles/tokens.css";   // variables first
-import "./index.css";           // Tailwind directives
-import "./styles/globals.css";
-import "./styles/motion.css";
+// app/router.tsx
+import { createBrowserRouter, Navigate } from "react-router-dom";
+import { lazy, Suspense } from "react";
+const Landing = lazy(() => import("@/features/landing/LandingPageView"));
+const Login = lazy(() => import("@/features/auth/LoginPage"));
+const Register = lazy(() => import("@/features/auth/RegisterPage"));
+const AppShell = lazy(() => import("@/components/layout/AppShell"));
+const Dashboard = lazy(() => import("@/features/dashboard/DashboardView"));
+const DoctorView = lazy(() => import("@/features/sharing/PublicDoctorPortalView"));
+
+export const router = createBrowserRouter([
+  { path: "/", element: <Landing /> },
+  { path: "/login", element: <Login /> },
+  { path: "/register", element: <Register /> },
+  { path: "/s/:token", element: <DoctorView /> },          // public QR view
+  { path: "/app", element: <AppShell />, children: [          // guarded
+      { index: true, element: <Navigate to="dashboard" replace /> },
+      { path: "dashboard", element: <Dashboard /> },
+      // records, trends, medicines, appointments, symptoms, visit-pack, sharing,
+      // assistant, family, privacy, settings ...
+  ]},
+  { path: "*", element: <div>Not found</div> },
+]);
+```
+Wrap with `<Suspense fallback={<PageLoader />}>`, `QueryClientProvider`, `MotionConfig reducedMotion="user"`, and an error boundary.
+
+## 5. Visual fixes with code
+
+### 5.1 Fix invisible CTA text (issue 1)
+```tsx
+<section className="bg-gradient-to-br from-green-900 to-green-700 text-white">
+  <h2 className="text-4xl md:text-5xl font-display font-bold text-white">
+    Start organising your family's health today.
+  </h2>
+  <p className="text-white/80">Create your free account, upload your first report.</p>
+  <Button variant="inverse">Create free account</Button> {/* white bg, green text */}
+</section>
+```
+Also scan for any other dark-on-dark text: search for `text-green-` inside dark panels.
+
+### 5.2 Navbar always visible
+```tsx
+<header className="fixed inset-x-0 top-0 z-50 transition-colors
+  data-[scrolled=true]:bg-white/80 data-[scrolled=true]:backdrop-blur data-[scrolled=true]:shadow-sm">
+```
+Add `pt-20` to the first section so content isn't hidden. Set `data-scrolled` from a scroll listener.
+
+### 5.3 Section rhythm (issue 3)
+Alternate backgrounds and add soft dividers:
+```tsx
+const bands = ["bg-white", "bg-green-50", "bg-white", "bg-[var(--bg)]", "bg-white", "bg-green-50"];
+```
+Use generous vertical padding (`py-20 md:py-28`), max width 1200px, and one accent shape (blurred green blob) behind hero and CTA.
+
+### 5.4 Hero with depth (issue 5)
+```tsx
+<section className="relative overflow-hidden bg-gradient-to-b from-green-50 via-white to-white">
+  <div aria-hidden className="absolute -top-32 -right-32 h-[520px] w-[520px] rounded-full bg-green-500/20 blur-3xl" />
+  <div aria-hidden className="absolute top-40 -left-24 h-[360px] w-[360px] rounded-full bg-green-700/10 blur-3xl" />
+  <div className="relative mx-auto max-w-[1200px] grid lg:grid-cols-2 gap-12 items-center py-24">
+    <div>
+      <h1 className="font-display font-bold tracking-tight text-[clamp(2.5rem,6vw,4.5rem)] leading-[1.05] text-green-900">
+        One place for your <span className="text-green-600">family's health</span> records.
+      </h1>
+      {/* subtitle, CTAs, small safety note */}
+    </div>
+    <HeroComposition /> {/* browser-frame dashboard + phone with dose reminder + floating chips */}
+  </div>
+</section>
+```
+`HeroComposition`: a larger dashboard card (BP chart), a phone frame overlapping bottom-right showing a dose reminder, and two floating chips ("Verified", "Expires in 45m") drifting with slow `y` loops. Use real components with synthetic data, not images.
+
+### 5.5 True bento grid (issue 4)
+```tsx
+<div className="grid grid-cols-1 md:grid-cols-6 gap-5 auto-rows-[220px]">
+  <Card className="md:col-span-3 md:row-span-2">{/* Records + OCR: mini review UI */}</Card>
+  <Card className="md:col-span-3">{/* Trends: mini sparkline chart */}</Card>
+  <Card className="md:col-span-2">{/* Reminders */}</Card>
+  <Card className="md:col-span-1">{/* Emergency card */}</Card>
+  <Card className="md:col-span-2">{/* Visit Pack */}</Card>
+  <Card className="md:col-span-4">{/* Family profiles with avatars */}</Card>
+</div>
+```
+Each card contains a small live UI preview (mini chart, toggle, QR, avatars), 24-32 px icon in a tinted tile, hover lift (`hover:-translate-y-1 hover:shadow-raised`).
+
+### 5.6 Real trend chart (issue 6)
+```tsx
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceArea, ResponsiveContainer } from "recharts";
+
+<ResponsiveContainer width="100%" height={280}>
+  <AreaChart data={data}>
+    <defs>
+      <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor="var(--green-600)" stopOpacity={0.35} />
+        <stop offset="100%" stopColor="var(--green-600)" stopOpacity={0} />
+      </linearGradient>
+    </defs>
+    <ReferenceArea y1={90} y2={120} fill="var(--green-100)" fillOpacity={0.6} />
+    <XAxis dataKey="date" tickLine={false} axisLine={false} />
+    <YAxis domain={[80, 160]} tickLine={false} axisLine={false} width={36} />
+    <Tooltip />
+    <Area type="monotone" dataKey="systolic" stroke="var(--green-700)" strokeWidth={3}
+          fill="url(#g)" isAnimationActive animationDuration={900} />
+  </AreaChart>
+</ResponsiveContainer>
+```
+Include 6-12 sample points, range buttons (3M/6M/1Y) that change the data, delta chip, and a table toggle.
+
+### 5.7 Scroll animations that are actually visible
+```tsx
+<motion.section initial={{ opacity: 0, y: 32 }} whileInView={{ opacity: 1, y: 0 }}
+  viewport={{ once: true, margin: "-80px" }} transition={{ duration: 0.6, ease: [0.22,1,0.36,1] }}>
+```
+Stagger children in grids, draw the "How it works" connector line with `scaleX` tied to scroll (`useScroll`), animate counters once in view, and add hover states to every card and button.
+
+### 5.8 Type and spacing
+Hero `clamp(2.5rem, 6vw, 4.5rem)`; section titles `text-3xl md:text-5xl`; body `text-lg text-muted`; section padding `py-20 md:py-28`; container `max-w-[1200px] px-6`.
+
+### 5.9 Content fixes
+- Replace "Apollo Clinic" with a fictional lab ("Sample Diagnostics Lab").
+- Replace jargon: "Private by design" instead of "Strict Patient Data Sovereignty"; "Answers come only from your records" instead of "Strict Evidence Match".
+- Remove or verify claims: "High accuracy", "Zero monetization", "Complete user control", "Immutable audit logs", "100% free".
+- Keep the safety line in the hero and footer.
+
+## 6. Prompt for the coding agent
+```text
+The Tailwind/token styling now works, but the landing page and app look like a plain template and are missing modern React architecture. Follow UI_POLISH_PASS.md.
+
+Do, in order, verifying each in a real browser with Playwright screenshots (1440px and 390px), and report what you verified vs assumed:
+1. Fix the invisible final CTA text (white on green) and any other dark-on-dark text. Make the navbar fixed at the top with blur on scroll.
+2. Add section rhythm: alternating backgrounds, larger type scale, 1200px container, blurred green blobs, hero gradient.
+3. Rebuild the hero composition: dashboard card + phone mockup + floating chips (real components, synthetic data), with subtle motion.
+4. Convert features into a true bento grid with live mini-previews and hover effects.
+5. Replace the demo trend chart with Recharts (area gradient, reference band, tooltip, range buttons, table toggle).
+6. Add scroll-reveal animations (whileInView, staggered), a scroll-drawn connector on How it works, and hover/focus states everywhere. Respect reduced motion.
+7. Introduce React Router with real URLs (/, /login, /register, /app/*, /s/:token), lazy routes with Suspense + PageLoader, an error boundary and a 404 page.
+8. Adopt TanStack Query for API data (profile-scoped keys, invalidate on profile switch) and react-hook-form + zod for forms. Migrate hand-rolled Dialog/Tabs/Tooltip/Accordion to Radix-based wrappers one at a time, keeping tests green.
+9. Fix content: no real brand names in demo data, plain-language copy, remove unverified claims.
+10. Add Playwright tests: styles applied, no console errors, navbar visible at top, CTA text contrast >= 4.5:1, axe has no serious violations, screenshots saved.
+Do not change the green/white tokens or the safety wording. Do not add paid services.
 ```
 
-**`src/index.css` (Tailwind v3):**
-```css
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-```
-
-**`postcss.config.js`:**
-```js
-export default { plugins: { tailwindcss: {}, autoprefixer: {} } };
-```
-
-**`tailwind.config.js` essentials:**
-```js
-export default {
-  content: ["./index.html", "./src/**/*.{ts,tsx}"],
-  theme: {
-    extend: {
-      colors: {
-        green: { 50:"var(--green-50)", 100:"var(--green-100)", 500:"var(--green-500)",
-                 600:"var(--green-600)", 700:"var(--green-700)", 800:"var(--green-800)", 900:"var(--green-900)" },
-        surface: "var(--surface)", bg: "var(--bg)", border: "var(--border)",
-        text: "var(--text)", muted: "var(--muted)",
-      },
-      fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
-        display: ["Plus Jakarta Sans", "Inter", "system-ui", "sans-serif"],
-      },
-      borderRadius: { DEFAULT: "12px", lg: "20px", xl: "28px" },
-      boxShadow: { card: "var(--shadow-1)", raised: "var(--shadow-2)" },
-    },
-  },
-  plugins: [],
-};
-```
-
-**Version check:** `npm ls tailwindcss`. v3 uses the files above. v4 ignores `tailwind.config.js`, needs `@import "tailwindcss";` and `@tailwindcss/vite`. Do not mix them.
-
-**Verify output size:**
-```powershell
-Remove-Item -Recurse -Force node_modules\.vite, dist -ErrorAction SilentlyContinue
-npm run build
-Get-ChildItem dist\assets\*.css | Select Name, Length
-```
-A healthy build is well above 20 kB. If it is still ~3 kB, check `content` globs, directives, PostCSS config, and that components use class names that exist in the theme.
-
-## 6. Screens and what they do
-
-| Screen | Key UI |
-|---|---|
-| **Landing** | Sticky blur navbar, hero with floating cards, trust strip, problem/solution, how it works, bento features, trends demo, doctor QR, family, AI assistant preview, privacy and safety, languages, FAQ, final CTA, footer with safety notice |
-| **Login** | 50/50 split, animated brand panel, staggered fields, shake on error, lockout countdown, show/hide password |
-| **Register** | 3 steps: account (strength meter) -> first profile -> consent and safety acknowledgement |
-| **Dashboard** | Today's medicines (Taken/Skip/Snooze), next appointment, review queue, StatCards (BP, glucose, weight, HbA1c) |
-| **Health Records** | Upload (drag/camera), status pills, split review: original document vs editable extracted fields |
-| **Timeline & Trends** | Metric picker, reference bands, delta chips, source links, table alternative |
-| **Medicines** | Schedule editor, refill meter, adherence calendar |
-| **Appointments** | Calendar/list, visit checklist |
-| **Symptoms** | Severity entries, include-in-Visit-Pack toggle |
-| **Doctor Visit Pack** | 3-step builder, questions, printable view, PDF export |
-| **Sharing & Emergency** | Time-limited PIN share, revoke, public read-only doctor view with watermark |
-| **AI Assistant** | 720px chat, prompt chips, quota meter, `[S1]` citation chips, evidence drawer |
-| **Family** | Profile cards, caregiver roles, invites |
-| **Privacy** | Access log, linked channels, export, delete request |
-| **Settings** | Notification channels (Push, Telegram, Email), discreet mode, quiet hours, language, Simple mode |
-
-## 7. Component conventions
-- Typed props; forward refs on form primitives; one component per file.
-- Every interactive element: accessible name, visible focus ring (`--focus`), keyboard operation.
-- Every data view has **loading, empty, error and permission-denied** states.
-- Use tokens only; no inline hex colours.
-- Animations through shared variants in `components/motion/variants.ts`; wrap shake-style effects in an inner element to avoid animation prop conflicts.
-- Medical wording: neutral ("above the reference range"), never "dangerous", "you have", or dose advice. AI content is labelled with sources and the footer: "This explains your records. Discuss decisions with your doctor."
-
-## 8. Data and API
-- All requests go through `src/api/client.ts` (typed). Do not call `fetch` directly in components.
-- Profile-scoped data is keyed by the active profile; switching profile resets caches and assistant context.
-- Verification and sharing permission changes are never optimistic.
-- Auth/session rules follow `AUTH.md`. Recommended: access token in memory, refresh token in an HttpOnly cookie. Frontend and API should share a parent domain (or use a proxy) so cookies work on iPhone Safari.
-
-## 9. Accessibility
-WCAG 2.2 AA target: full keyboard use, visible focus, labelled inputs, error summaries with `aria-live`, chart table alternative, reduced motion, 200% zoom without horizontal scroll, `lang` updates with language, tap targets at least 44px, no colour-only meaning.
-
-## 10. Performance
-- Current production build reports a ~538 kB JS chunk (about 149 kB gzip). Reduce with `React.lazy` route splitting and `manualChunks` for vendor code.
-- Lazy-load landing sections, QR and chart code; animate transform/opacity only.
-- Images WebP/AVIF with explicit width/height; fonts with `font-display: swap`.
-- Targets: Lighthouse mobile performance >= 90, accessibility 100 on landing and login.
-
-## 11. Testing
-
-| Level | How |
-|---|---|
-| Unit/integration | Vitest + Testing Library (jsdom) for components and flows |
-| Visual/CSS | **Playwright** screenshots (jsdom does not load Tailwind or real CSS) |
-| Accessibility | axe in Playwright and component tests |
-| E2E | Landing -> register -> login -> dashboard -> upload -> verify -> trends -> share |
-
-**Important:** passing Vitest does not prove the UI looks right. Add a Playwright smoke test that fails if `--green-800` is empty, the primary button background is transparent, or the CSS bundle is suspiciously small:
-
-```ts
-import { test, expect } from "@playwright/test";
-
-test("styles are applied", async ({ page }) => {
-  await page.goto("/");
-  const token = await page.evaluate(() =>
-    getComputedStyle(document.documentElement).getPropertyValue("--green-800").trim());
-  expect(token).not.toBe("");
-  const btn = page.getByRole("button", { name: /get started/i }).first();
-  const bg = await btn.evaluate((el) => getComputedStyle(el).backgroundColor);
-  expect(bg).not.toBe("rgba(0, 0, 0, 0)");
-});
-```
-Take screenshots at 1440 px and 390 px for landing, login, register and dashboard, and review them before merging.
-
-## 12. Environment variables
-Create `frontend/.env`:
-```dotenv
-VITE_API_URL=http://127.0.0.1:8000/api/v1
-```
-Never put secrets in frontend env files; anything prefixed `VITE_` is public.
-
-## 13. Troubleshooting
-
-| Symptom | Likely cause | Fix |
-|---|---|---|
-| No colours, plain HTML look, CSS ~3 kB | Tailwind not generating utilities | Section 5: directives, PostCSS config, `content` globs, version match |
-| Colours missing but layout works | Token file not imported or class names not in theme | Import order in `main.tsx`; map tokens in `tailwind.config.js` |
-| No animations | OS "Animation effects" off, or reduced-motion emulation | Enable in Windows settings; DevTools Rendering -> `prefers-reduced-motion: no-preference` |
-| Old UI shows | Stale service worker or Vite cache | Unregister the service worker, delete `node_modules\.vite`, hard refresh |
-| Weird file-watch or stale files | Project inside OneDrive | Pause sync or move to `C:\dev\Healthmate_AI` |
-| `motion/react` import errors | Package/alias mismatch | Use one package consistently (`motion` or `framer-motion`) and keep aliases in `vite.config.ts` and `tsconfig.json` in sync |
-| Login works then logs out on iPhone | Cross-site refresh cookie blocked | Same parent domain or same-origin proxy |
-| First request very slow | Free host cold start | Expected; `ColdStartBanner` explains; cron keep-alive in `DEPLOYMENT.md` |
-
-## 14. Deployment (Vercel)
-1. Set `VITE_API_URL` in Vercel project settings.
-2. Build command `npm run build`, output `dist`.
-3. Add the Vercel domain to the backend CORS allow-list (no trailing slash).
-4. Prefer same-site cookies via custom domain or a rewrite from `/api` to the backend.
-5. After deploy: smoke test landing, register, login, dashboard, share link, and the Lighthouse targets.
-
-## 15. Contribution checklist (per screen)
-- [ ] Uses tokens and spacing scale; no hard-coded colours
-- [ ] Loading, empty, error, permission-denied states
-- [ ] Keyboard and screen-reader pass (axe clean)
-- [ ] Reduced-motion verified
-- [ ] 360, 768 and 1440 px layouts, no horizontal scroll
-- [ ] Real API types; synthetic demo data only where labelled
-- [ ] Neutral medical wording; AI content labelled with sources
-- [ ] Vitest tests plus Playwright screenshot reviewed
-
-## 16. Status
-The agent-run rebuild reports 92 passing Vitest tests and a successful production build, with the old UI removed. **Visual verification in a real browser is still required** (styles, colours and animations); see sections 5 and 11 before treating the UI as done.
+## 7. Acceptance checklist
+- [ ] Every section is visually distinct; no unreadable text (contrast >= 4.5:1).
+- [ ] Hero has gradient depth, large type and a composed product mockup.
+- [ ] Bento cards differ in size and contain live mini UI.
+- [ ] Trend chart shows real points, tooltip, reference band, range buttons.
+- [ ] Scroll animations visible once per section; reduced motion respected.
+- [ ] URLs work (refresh on `/app/dashboard` keeps you there; `/s/:token` opens the doctor view).
+- [ ] Lighthouse mobile performance >= 90, accessibility 100 on landing and login.
+- [ ] Playwright screenshots reviewed at 1440 px and 390 px.
