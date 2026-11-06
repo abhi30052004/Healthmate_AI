@@ -24,6 +24,8 @@ from app.schemas.insights import (
     OverviewMetrics,
     PersonalizedHealthSummary,
 )
+from app.services.llm import complete as llm_complete, resolve_llm_target
+from app.services.medical_chat import normalize_llm_text
 from app.services.medical_insights import (
     calculate_overview_metrics,
     get_data_quality_report,
@@ -197,11 +199,25 @@ async def generate_personalized_health_summary(
         quality=quality,
     )
 
-    # If LLM mode requested and API credentials exist, enhance phrasing while locking factual data
-    provider = os.getenv("MEDICAL_CHAT_PROVIDER", "fallback").lower()
-    api_key = os.getenv("MEDICAL_CHAT_API_KEY") or os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
-
-    if mode == "llm_assisted" and api_key and provider != "fallback":
-        base_summary.summary_mode = "llm_assisted"
+    # LLM-assisted mode: rephrase the narrative in plain language while the facts stay locked.
+    if mode == "llm_assisted" and resolve_llm_target() is not None:
+        facts = "\n".join(
+            [base_summary.narrative_summary, *base_summary.key_findings, *base_summary.longitudinal_highlights]
+        )
+        system = (
+            "You are HealthMate AI. Rewrite the patient's record summary in warm, plain language "
+            "(max 180 words, 2-3 short paragraphs). RULES: keep every number, unit, date and "
+            "citation tag like [S1] exactly as given; add no new facts; never diagnose or advise "
+            "changing treatment; end by suggesting they discuss results with their clinician."
+        )
+        rewritten = await llm_complete(system, "Record facts:\n" + facts, temperature=0.2)
+        if rewritten:
+            rewritten = normalize_llm_text(rewritten)
+            # Facts that must survive verbatim: every cited lab value and citation tag.
+            values = {str(c.value) for c in base_summary.citations if c.value}
+            tags = {c.citation_id for c in base_summary.citations}
+            if all(v in rewritten for v in values) and all(t in rewritten for t in tags):
+                base_summary.narrative_summary = rewritten
+                base_summary.summary_mode = "llm_assisted"
 
     return base_summary

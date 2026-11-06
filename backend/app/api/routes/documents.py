@@ -10,12 +10,17 @@ from app.core.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.document import (
     DocumentRead,
+    ManualEntryCreate,
+    ObservationCreate,
     DocumentTextResponse,
     DocumentVerifyResponse,
     ObservationRead,
     ObservationUpdate,
 )
 from app.services.document import (
+    add_document_observation,
+    create_manual_entry,
+    delete_document_observation,
     delete_user_document,
     get_user_document,
     get_user_document_file_path,
@@ -225,4 +230,49 @@ def backfill_checksums(
     """Safely backfill SHA-256 cryptographic checksums for documents missing them."""
     from app.services.checksum_backfill import backfill_document_checksums
     return backfill_document_checksums(db)
+
+
+@router.post(
+    "/manual-entry",
+    response_model=DocumentRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Record lab values or vitals by hand",
+)
+def manual_entry(
+    payload: ManualEntryCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> DocumentRead:
+    """Create a verified record from user-entered values (no file)."""
+    return create_manual_entry(db, current_user, payload)
+
+
+@router.post(
+    "/{document_id}/observations",
+    response_model=ObservationRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Add a missed result to a document",
+)
+def add_observation(
+    document_id: uuid.UUID,
+    payload: ObservationCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> ObservationRead:
+    return add_document_observation(db, document_id, current_user, payload)
+
+
+@router.delete(
+    "/{document_id}/observations/{observation_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Reject a wrongly extracted observation",
+)
+def remove_observation(
+    document_id: uuid.UUID,
+    observation_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> Response:
+    delete_document_observation(db, document_id, observation_id, current_user)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 

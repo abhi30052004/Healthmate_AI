@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Index, String, Text, func
+from sqlalchemy import JSON, Date, DateTime, ForeignKey, Index, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -61,6 +61,16 @@ class MedicationRecord(Base):
         nullable=True,  # Twice daily, Once daily at bedtime, etc.
     )
 
+    schedule_times: Mapped[list | None] = mapped_column(
+        JSON,
+        nullable=True,  # ["08:00", "20:00"] wall-clock dose times; empty/None = as needed
+    )
+
+    schedule_days: Mapped[list | None] = mapped_column(
+        JSON,
+        nullable=True,  # weekday numbers 0=Mon..6=Sun; empty/None = every day
+    )
+
     start_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
@@ -115,6 +125,7 @@ class MedicationRecord(Base):
     user = relationship("User", back_populates="medications")
     family_profile = relationship("FamilyProfile", back_populates="medications")
     source_document = relationship("Document")
+    dose_logs = relationship("DoseLog", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<MedicationRecord(id={self.id}, name='{self.name}', status='{self.status}')>"

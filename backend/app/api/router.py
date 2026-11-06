@@ -1,11 +1,13 @@
 from fastapi import APIRouter
 
+from app.api.routes.account import router as account_router
+from app.api.routes.tracking import doses_router, symptoms_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.care import router as care_router
 from app.api.routes.data_quality import router as data_quality_router
 from app.api.routes.doctor_sharing import doctor_router, router as doctor_sharing_router
 from app.api.routes.documents import router as documents_router
-from app.api.routes.family_profile import router as family_profile_router
+from app.api.routes.family_profile import public_router as emergency_public_router, router as family_profile_router
 from app.api.routes.medical_chat import router as medical_chat_router
 from app.api.routes.medical_insights import router as medical_insights_router
 from app.api.routes.medical_search import router as medical_search_router
@@ -17,8 +19,12 @@ from app.api.routes.visit_pack import router as visit_pack_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router)
+api_router.include_router(account_router)
 api_router.include_router(family_profile_router)
+api_router.include_router(emergency_public_router)
 api_router.include_router(care_router)
+api_router.include_router(doses_router)
+api_router.include_router(symptoms_router)
 api_router.include_router(documents_router)
 api_router.include_router(timeline_router)
 api_router.include_router(medical_chat_router)

@@ -9,7 +9,7 @@ export interface CitationData {
   id: string;
   sourceIndex: number;
   documentTitle: string;
-  pageNumber: number;
+  pageNumber?: number | null;
   date?: string;
   excerpt: string;
   testName?: string;
@@ -87,7 +87,7 @@ export function CitationChip({
       type="button"
       onClick={() => onClick(citation)}
       className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[var(--green-100)] hover:bg-[var(--green-100)]/80 text-[var(--green-900)] text-xs font-semibold transition-colors border border-[var(--green-600)]/30 mx-0.5"
-      title={`Source [S${citation.sourceIndex}]: ${citation.documentTitle} (Page ${citation.pageNumber})`}
+      title={`Source [S${citation.sourceIndex}]: ${citation.documentTitle}${citation.pageNumber ? ` (Page ${citation.pageNumber})` : ""}`}
     >
       <BookOpen className="w-3 h-3 text-[var(--green-700)]" />
       <span>[S{citation.sourceIndex}]</span>
@@ -131,7 +131,7 @@ export function EvidenceDrawer({
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div className="p-2.5 rounded-lg bg-[var(--surface)] border border-[var(--border)]">
               <span className="text-[var(--muted)] block">Page Location</span>
-              <span className="font-semibold text-[var(--text)]">Page {citation.pageNumber}</span>
+              <span className="font-semibold text-[var(--text)]">{citation.pageNumber ? `Page ${citation.pageNumber}` : "Not available"}</span>
             </div>
             {citation.date && (
               <div className="p-2.5 rounded-lg bg-[var(--surface)] border border-[var(--border)]">
@@ -178,10 +178,10 @@ export function AIAnswerCard({
       <div className="p-4 bg-[var(--green-50)]/70 border-b border-[var(--border)] flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs font-semibold text-[var(--green-900)]">
           <Sparkles className="w-4 h-4 text-[var(--green-700)]" />
-          <span>HealthMate Clinical Record Explanation</span>
+          <span>HealthMate record explanation</span>
         </div>
         <Badge variant="verified" size="sm">
-          Strict Evidence Match
+          Based on your records
         </Badge>
       </div>
 
@@ -210,7 +210,7 @@ export function AIAnswerCard({
                   <FileText className="w-3.5 h-3.5 text-[var(--green-700)]" />
                   <span className="font-semibold text-[var(--green-800)]">[S{c.sourceIndex}]</span>
                   <span className="truncate max-w-[200px]">{c.documentTitle}</span>
-                  <span className="text-[var(--muted)] text-[10px]">(p.{c.pageNumber})</span>
+                  {c.pageNumber ? <span className="text-[var(--muted)] text-[10px]">(p.{c.pageNumber})</span> : null}
                 </button>
               ))}
             </div>

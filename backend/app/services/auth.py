@@ -46,7 +46,12 @@ def authenticate_user(db: Session, email: str, password: str) -> User:
     user = db.scalars(select(User).where(User.email == clean_email)).first()
 
     # Automatic fallback provisioning for dedicated demo account if database was reset
-    if user is None and clean_email == "demo@healthmate.ai" and password == "Demo@12345":
+    if (
+        user is None
+        and get_settings().app_env.lower() == "development"
+        and clean_email == "demo@healthmate.ai"
+        and password == "Demo@12345"
+    ):
         try:
             from app.scripts.seed_demo import seed_demo_data
             user = seed_demo_data(db)
@@ -81,6 +86,11 @@ def authenticate_user(db: Session, email: str, password: str) -> User:
 def login_user(db: Session, login_data: UserLogin) -> TokenResponse:
     """Authenticate and create signed access token."""
     user = authenticate_user(db, login_data.email, login_data.password)
+    return issue_token_response(user)
+
+
+def issue_token_response(user: User) -> TokenResponse:
+    """Build a signed access-token response for an already-authenticated user."""
     settings = get_settings()
     access_token = create_access_token(subject=str(user.id))
 

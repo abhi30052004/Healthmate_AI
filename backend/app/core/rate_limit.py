@@ -57,3 +57,6 @@ class SlidingWindowRateLimiter:
 auth_login_limiter = SlidingWindowRateLimiter(requests_per_window=20, window_seconds=60)
 auth_register_limiter = SlidingWindowRateLimiter(requests_per_window=10, window_seconds=60)
 shared_portal_limiter = SlidingWindowRateLimiter(requests_per_window=60, window_seconds=60)
+password_reset_limiter = SlidingWindowRateLimiter(requests_per_window=5, window_seconds=60)
+password_reset_confirm_limiter = SlidingWindowRateLimiter(requests_per_window=10, window_seconds=60)
+emergency_card_limiter = SlidingWindowRateLimiter(requests_per_window=30, window_seconds=60)

@@ -20,12 +20,12 @@ export function FileDropzone({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  const allowedTypes = ["application/pdf", "image/png", "image/jpeg", "image/webp"];
+  const allowedTypes = ["application/pdf", "image/png", "image/jpeg"];
 
   const handleFile = (file: File) => {
     setError(null);
     if (!allowedTypes.includes(file.type)) {
-      setError("Please select a PDF document or image file (JPEG, PNG, WebP).");
+      setError("Please select a PDF document or image file (JPEG or PNG).");
       return;
     }
     if (file.size > maxSizeMB * 1024 * 1024) {
@@ -67,7 +67,7 @@ export function FileDropzone({
             Drag and drop your medical report here
           </p>
           <p className="text-xs text-[var(--muted)]">
-            Supported formats: PDF, PNG, JPG, WebP up to {maxSizeMB}MB
+            Supported formats: PDF, PNG, JPG up to {maxSizeMB}MB
           </p>
         </div>
 
@@ -89,7 +89,7 @@ export function FileDropzone({
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.png,.jpg,.jpeg,.webp"
+              accept=".pdf,.png,.jpg,.jpeg"
               onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
               className="hidden"
             />
@@ -106,7 +106,7 @@ export function FileDropzone({
             <input
               ref={cameraInputRef}
               type="file"
-              accept="image/*"
+              accept="image/png,image/jpeg"
               capture="environment"
               onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
               className="hidden"

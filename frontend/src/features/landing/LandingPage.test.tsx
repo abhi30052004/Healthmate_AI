@@ -1,97 +1,84 @@
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { LandingPageView } from "./LandingPageView";
 
-describe("Step 12 - Public Landing Page (All 15 Sections)", () => {
-  it("renders navbar, hero, trust strip, and triggers onGetStarted", () => {
+describe("Landing page", () => {
+  it("renders the navigation, hero, trust points and wires the call-to-action buttons", () => {
     const onGetStarted = vi.fn();
     const onLogin = vi.fn();
-
     render(<LandingPageView onGetStarted={onGetStarted} onLogin={onLogin} />);
 
-    // 1. Navbar
-    expect(screen.getByText("HealthMate")).toBeDefined();
-    expect(screen.getByRole("button", { name: /Log in/i })).toBeDefined();
+    expect(screen.getByRole("link", { name: /HealthMate AI home/i })).toBeDefined();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toMatch(/Your family’s health, finally in one place/i);
+    expect(screen.getByText(/Every screen shown on this page uses synthetic sample data/i)).toBeDefined();
+    expect(screen.getByText("Private by default")).toBeDefined();
+    expect(screen.getByText("You verify every value")).toBeDefined();
+    expect(screen.getByText("Time-limited QR links")).toBeDefined();
+    expect(screen.getByTestId("hero-scene")).toBeDefined();
 
-    // 2. Hero
-    expect(screen.getByText(/One place for your family’s health records/i)).toBeDefined();
-    expect(screen.getByText(/Demo uses synthetic data/i)).toBeDefined();
-
-    // 3. Trust strip
-    expect(screen.getByText("Private by Default")).toBeDefined();
-    expect(screen.getByText("You Verify Extracted Data")).toBeDefined();
-    expect(screen.getByText("Time-Limited QR Sharing")).toBeDefined();
-
-    // Trigger CTA
-    const getStartedButtons = screen.getAllByRole("button", { name: /Get started free/i });
-    fireEvent.click(getStartedButtons[0]);
-    expect(onGetStarted).toHaveBeenCalled();
+    fireEvent.click(screen.getAllByRole("button", { name: /Get started free/i })[0]);
+    expect(onGetStarted).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getAllByRole("button", { name: /^Log in$/i })[0]);
+    expect(onLogin).toHaveBeenCalledTimes(1);
   });
 
-  it("renders problem/solution, how it works, and bento grid", () => {
+  it("covers every product area without claiming things the app does not do", () => {
     render(<LandingPageView />);
-
-    // 4. Problem -> Solution
-    expect(screen.getByText(/Stop carrying disorganized medical paperwork/i)).toBeDefined();
-    expect(screen.getByText(/The Painful Medical Paper Trail/i)).toBeDefined();
-    expect(screen.getByText(/The HealthMate Unified Timeline/i)).toBeDefined();
-
-    // 5. How it works
-    expect(screen.getByText("How HealthMate works in 4 simple steps")).toBeDefined();
-    expect(screen.getByText("Upload or Scan")).toBeDefined();
-    expect(screen.getByText("Review Extracted Data")).toBeDefined();
-    expect(screen.getByText("Track Trends & Doses")).toBeDefined();
-    expect(screen.getByText("Share with Your Doctor")).toBeDefined();
-
-    // 6. Feature bento grid
-    expect(screen.getByText("Records & OCR")).toBeDefined();
-    expect(screen.getByText("Trend Graphs")).toBeDefined();
-    expect(screen.getByText("Medicine Schedules")).toBeDefined();
-    expect(screen.getByText("Doctor Visit Pack")).toBeDefined();
-    expect(screen.getByText("Family & Caregivers")).toBeDefined();
-    expect(screen.getByText("Emergency Card")).toBeDefined();
+    for (const name of [/Upload once/i, /See what is changing/i, /Never miss a dose/i, /Ask your records/i, /Share with your doctor in 30 seconds/i]) {
+      expect(screen.getByRole("heading", { name })).toBeDefined();
+    }
+    for (const t of ["Family profiles", "Emergency card", "Doctor visit pack", "Symptom diary", "Appointments & checklists"]) {
+      expect(screen.getByRole("heading", { name: t })).toBeDefined();
+    }
+    // claims that were removed because the product cannot back them up
+    const text = document.body.textContent ?? "";
+    expect(text).not.toMatch(/PIN-protected/i);
+    expect(text).not.toMatch(/Telegram/i);
+    expect(text).not.toMatch(/HIPAA/i);
+    expect(text).toMatch(/never diagnoses or prescribes/i);
   });
 
-  it("interacts with trends demo range selector and toggles FAQ accordion", () => {
+  it("family switcher, dose tracker and trend range respond to interaction", async () => {
     render(<LandingPageView />);
 
-    // 7. Trends Demo
-    expect(screen.getByText(/Systolic Blood Pressure \(Synthetic Demo\)/i)).toBeDefined();
-    const range3M = screen.getByRole("button", { name: "3M" });
-    fireEvent.click(range3M);
-    expect(screen.getByText(/Systolic Blood Pressure/i)).toBeDefined();
+    const family = screen.getByTestId("family-demo");
+    fireEvent.click(within(family).getByRole("tab", { name: /Meera/ }));
+    await waitFor(() => expect(family.textContent).toContain("Type 2 diabetes"));
 
-    // 8. Doctor QR
-    expect(screen.getByText("Share with your doctor in 30 seconds by QR")).toBeDefined();
+    const dose = screen.getByTestId("dose-demo");
+    expect(dose.textContent).toContain("1/4");
+    fireEvent.click(within(dose).getByRole("button", { name: /Vitamin D3/ }));
+    expect(dose.textContent).toContain("2/4");
 
-    // 9. Family
-    expect(screen.getByText("Caring for aging parents and children")).toBeDefined();
+    const trend = screen.getByTestId("trend-demo");
+    fireEvent.click(within(trend).getByRole("button", { name: "3M" }));
+    expect(within(trend).getByRole("button", { name: "3M" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(within(trend).getByRole("button", { name: /Show chart data as a table/i }));
+    expect(within(trend).getByRole("table")).toBeDefined();
+  });
 
-    // 10. AI Assistant preview
-    expect(screen.getByText("Ask questions about your records safely")).toBeDefined();
-    expect(screen.getByText(/What was my latest HbA1c result\?/i)).toBeDefined();
+  it("QR demo can revoke and recreate the sample link", () => {
+    render(<LandingPageView />);
+    const qr = screen.getByTestId("qr-demo");
+    fireEvent.click(within(qr).getByRole("button", { name: "Revoke link" }));
+    expect(qr.textContent).toContain("Link revoked");
+    fireEvent.click(within(qr).getByRole("button", { name: /Create a new link/i }));
+    expect(qr.textContent).not.toContain("Link revoked");
+  });
 
-    // 11. Privacy & safety
-    expect(screen.getByText("You Own Your Data")).toBeDefined();
+  it("FAQ opens one answer at a time", () => {
+    render(<LandingPageView />);
+    const q = screen.getByRole("button", { name: /Does HealthMate AI diagnose diseases or prescribe medicine\?/i });
+    expect(q.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(q);
+    expect(q.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText(/strictly explains what is already in your records/i)).toBeDefined();
+    expect(screen.getByRole("button", { name: /Is HealthMate AI free to use\?/i }).getAttribute("aria-expanded")).toBe("false");
+  });
 
-    // 12. Languages
-    expect(screen.getByRole("button", { name: /বাংলা \(Bengali\)/i })).toBeDefined();
-
-    // 13. FAQ
-    const faqButton = screen.getByText("Does HealthMate AI diagnose diseases or prescribe medicine?");
-    fireEvent.click(faqButton);
-    expect(screen.getByText(/HealthMate AI strictly explains patient records/i)).toBeDefined();
-
-    // 14. Final CTA
-    expect(screen.getByText("Start organising your family’s health today.")).toBeDefined();
-
-    // 15. Footer safety statement
-    expect(
-      screen.getAllByText(
-        /HealthMate AI explains records and supports doctor conversations\. It never diagnoses or prescribes\./i
-      ).length
-    ).toBeGreaterThanOrEqual(1);
+  it("shows the safety statement in the footer", () => {
+    render(<LandingPageView />);
+    expect(screen.getAllByText(/explains records and supports doctor conversations\. It never diagnoses or prescribes\./i).length).toBeGreaterThanOrEqual(1);
   });
 });
-

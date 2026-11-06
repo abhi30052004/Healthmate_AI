@@ -51,7 +51,9 @@ frontend/
   tailwind.config.js        postcss.config.js        vite.config.ts        tsconfig.json
   src/
     main.tsx                 App entry (imports CSS in the order shown in section 5)
-    App.tsx                  Top-level routing, auth gate, profile scope, view transitions
+    app/                     router.tsx (routes), ProtectedRoute.tsx (auth guard), AppLayout.tsx (session, profiles, shell), queryClient.ts
+    context/AuthContext.tsx  Session: token in sessionStorage, sliding renewal, 401 -> sign-out
+    lib/dates.ts             Local-timezone date/time helpers (never UTC-shifted)
     index.css                Tailwind directives
     styles/
       tokens.css             Colour, radius, shadow, focus variables (green + white)
@@ -215,10 +217,14 @@ A healthy build is well above 20 kB. If it is still ~3 kB, check `content` globs
 - Medical wording: neutral ("above the reference range"), never "dangerous", "you have", or dose advice. AI content is labelled with sources and the footer: "This explains your records. Discuss decisions with your doctor."
 
 ## 8. Data and API
+- Every screen reads and writes the **real backend**; there is no mock or sample data in the app. The only fixed content is the marketing landing page.
 - All requests go through `src/api/client.ts` (typed). Do not call `fetch` directly in components.
-- Profile-scoped data is keyed by the active profile; switching profile resets caches and assistant context.
+- Server state uses TanStack Query. Health-data query keys include the active profile id, and switching profile cancels in-flight requests and starts a fresh assistant conversation.
+- The active profile always comes from the server's `/api/family-profiles` response for the signed-in account (a first "self" profile is created automatically).
 - Verification and sharing permission changes are never optimistic.
-- Auth/session rules follow `AUTH.md`. Recommended: access token in memory, refresh token in an HttpOnly cookie. Frontend and API should share a parent domain (or use a proxy) so cookies work on iPhone Safari.
+- Session: `AuthProvider` keeps the token in `sessionStorage`, renews it at 75% of its lifetime via `POST /api/auth/refresh` while the tab is open, and any API 401 signs the user out. `/app/*` is guarded by `ProtectedRoute`.
+- Dates and times use the browser's **local** timezone (`src/lib/dates.ts`); appointments, reminders and symptoms are sent as timezone-aware ISO strings.
+- Doctor links are built as `<origin>/s/<token>`; the backend returns the token only once, at creation.
 
 ## 9. Accessibility
 WCAG 2.2 AA target: full keyboard use, visible focus, labelled inputs, error summaries with `aria-live`, chart table alternative, reduced motion, 200% zoom without horizontal scroll, `lang` updates with language, tap targets at least 44px, no colour-only meaning.
@@ -231,36 +237,37 @@ WCAG 2.2 AA target: full keyboard use, visible focus, labelled inputs, error sum
 
 ## 11. Testing
 
-| Level | How |
-|---|---|
-| Unit/integration | Vitest + Testing Library (jsdom) for components and flows |
-| Visual/CSS | **Playwright** screenshots (jsdom does not load Tailwind or real CSS) |
-| Accessibility | axe in Playwright and component tests |
-| E2E | Landing -> register -> login -> dashboard -> upload -> verify -> trends -> share |
+| Level | Command | What it proves |
+|---|---|---|
+| Unit / component | `npx vitest run` | Each view against a mocked API layer: states, validation, payloads, profile scoping |
+| Type check | `npx tsc -b` | Runs automatically as part of `npm run build` |
+| Browser journey (real API) | `npx playwright test full-flow --project=Desktop` | Register -> add results by hand -> upload and verify a PDF -> trends -> medication doses -> appointment + checklist -> symptoms -> visit pack PDF -> assistant -> second profile isolation -> doctor link (open signed-out, revoke) -> emergency card -> reminder shows in the bell -> search -> export -> delete account |
+| Layout + accessibility | `npx playwright test app-layout` | Every signed-in page at 1440px and 390px: no horizontal overflow, no console errors, no critical axe violations |
+| Public pages / styling | `npx playwright test polish-verify smoke` | Landing, login, register, doctor-portal failure state, contrast, axe |
 
-**Important:** passing Vitest does not prove the UI looks right. Add a Playwright smoke test that fails if `--green-800` is empty, the primary button background is transparent, or the CSS bundle is suspiciously small:
+### Running the browser tests (uses a throwaway database, never your real one)
 
-```ts
-import { test, expect } from "@playwright/test";
+```powershell
+# 1. Throwaway API on port 8010 with an empty SQLite database
+cd backend
+$env:DATABASE_URL = "sqlite:///$PWD/e2e.db"; $env:DOCUMENT_STORAGE_DIR = "$PWD/e2e_uploads"
+$env:FRONTEND_ORIGINS = "http://127.0.0.1:4173,http://localhost:4173"
+.\.venv\Scripts\python.exe -c "from app.core.database import get_engine; from app.db.base import Base; import app.models; Base.metadata.create_all(get_engine())"
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8010
 
-test("styles are applied", async ({ page }) => {
-  await page.goto("/");
-  const token = await page.evaluate(() =>
-    getComputedStyle(document.documentElement).getPropertyValue("--green-800").trim());
-  expect(token).not.toBe("");
-  const btn = page.getByRole("button", { name: /get started/i }).first();
-  const bg = await btn.evaluate((el) => getComputedStyle(el).backgroundColor);
-  expect(bg).not.toBe("rgba(0, 0, 0, 0)");
-});
+# 2. In another terminal: build the frontend against it and run the specs
+cd frontend
+$env:VITE_API_BASE_URL = "http://127.0.0.1:8010"; npm run build
+npx playwright test --project=Desktop      # add E2E_API_URL=http://127.0.0.1:8010 if you used another port
 ```
-Take screenshots at 1440 px and 390 px for landing, login, register and dashboard, and review them before merging.
+Rebuild without `VITE_API_BASE_URL` afterwards so `dist/` points at your normal API. The reminder step waits about a minute on purpose: it proves the app processes due reminders while open.
 
 ## 12. Environment variables
-Create `frontend/.env`:
+Create `frontend/.env` (the client appends `/api/...` itself, so **do not** include a path):
 ```dotenv
-VITE_API_URL=http://127.0.0.1:8000/api/v1
+VITE_API_BASE_URL=http://127.0.0.1:8000
 ```
-Never put secrets in frontend env files; anything prefixed `VITE_` is public.
+`VITE_API_URL` is accepted as a fallback. These values are baked in at build time and are public: never put secrets in a `VITE_` variable.
 
 ## 13. Troubleshooting
 
@@ -293,4 +300,6 @@ Never put secrets in frontend env files; anything prefixed `VITE_` is public.
 - [ ] Vitest tests plus Playwright screenshot reviewed
 
 ## 16. Status
-The agent-run rebuild reports 92 passing Vitest tests and a successful production build, with the old UI removed. **Visual verification in a real browser is still required** (styles, colours and animations); see sections 5 and 11 before treating the UI as done.
+All screens are connected to the real API and covered by unit tests (154), a 19-step real-API browser journey, and per-page layout/accessibility checks at desktop and phone width.
+
+**Not built yet** (the UI says so or omits them rather than faking them): password reset by email, Web Push / Telegram / email channels as account-level settings, caregiver invitations and roles, a public emergency-card QR, and MCP. Reminders are shown in the in-app bell while the app is open; there is no background scheduler for closed apps.

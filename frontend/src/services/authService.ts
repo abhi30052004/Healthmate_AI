@@ -211,6 +211,67 @@ export const authService = {
 
     return res.json();
   },
+
+  /**
+   * Renew the access token for a still-valid session (sliding renewal).
+   */
+  async refresh(token: string): Promise<LoginResponse> {
+    const base = getApiBaseUrl();
+    let res: Response;
+    try {
+      res = await fetch(`${base}/api/auth/refresh`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch {
+      throw new ApiError(0, "Unable to connect to the server.");
+    }
+    if (!res.ok) {
+      throw new ApiError(res.status, await parseApiError(res));
+    }
+    return res.json();
+  },
+
+  /**
+   * Ask the server to email a password reset link. The answer is identical whether or
+   * not the address is registered, so this never reveals which emails have accounts.
+   */
+  async forgotPassword(email: string): Promise<string> {
+    const base = getApiBaseUrl();
+    let res: Response;
+    try {
+      res = await fetch(`${base}/api/auth/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+    } catch {
+      throw new ApiError(0, "Unable to connect to the server. Please try again.");
+    }
+    if (!res.ok) {
+      throw new ApiError(res.status, res.status === 429 ? "Too many requests. Please wait a minute and try again." : await parseApiError(res));
+    }
+    return (await res.json()).message as string;
+  },
+
+  /** Choose a new password using the single-use token from the emailed link. */
+  async resetPassword(token: string, newPassword: string): Promise<string> {
+    const base = getApiBaseUrl();
+    let res: Response;
+    try {
+      res = await fetch(`${base}/api/auth/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, new_password: newPassword }),
+      });
+    } catch {
+      throw new ApiError(0, "Unable to connect to the server. Please try again.");
+    }
+    if (!res.ok) {
+      throw new ApiError(res.status, res.status === 429 ? "Too many attempts. Please wait a minute and try again." : await parseApiError(res));
+    }
+    return (await res.json()).message as string;
+  },
 };
 
 export const registerUser = authService.register;

@@ -1,1169 +1,677 @@
-import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import React, { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion, useScroll, useSpring, useTransform } from "motion/react";
 import {
-  ShieldCheck,
-  CheckCircle2,
-  FileText,
-  TrendingUp,
-  Clock,
-  QrCode,
-  Users,
   ArrowRight,
+  Check,
   ChevronDown,
-  Lock,
-  AlertCircle,
-  FileCheck,
-  Menu,
-  X,
-  Stethoscope,
+  Download,
+  FileSearch,
+  FileText,
   HeartPulse,
-  ExternalLink,
-  ChevronRight,
-  Eye,
-  Table as TableIcon,
+  Lock,
+  Menu,
+  QrCode,
+  ShieldCheck,
+  Sparkles,
+  Stethoscope,
+  Trash2,
+  TrendingUp,
+  Upload,
+  Users,
+  X,
 } from "lucide-react";
+import "./landing.css";
+import { Bubble, LogoMark, Reveal, SectionHeading } from "./art/primitives";
+import { HeroScene } from "./art/HeroScene";
+import { AssistantDemo, DoseDemo, ScanDemo, TrendDemo } from "./art/FeatureDemos";
 import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ReferenceArea,
-} from "recharts";
-import { Button } from "../../components/ui/Button";
-import { Card } from "../../components/ui/Card";
-import { Badge } from "../../components/ui/Badge";
+  ApptMini,
+  EmergencyMini,
+  FamilyDemo,
+  LanguageMini,
+  QrShareDemo,
+  ShieldArt,
+  SymptomMini,
+  VisitPackMini,
+} from "./art/ShareAndFamily";
 
 export interface LandingPageProps {
   onGetStarted?: () => void;
   onLogin?: () => void;
 }
 
-// Synthetic Blood Pressure Points for the 3M, 6M, 1Y demo
-const TREND_DATA_3M = [
-  { date: "Aug 10", systolic: 132, diastolic: 84 },
-  { date: "Aug 28", systolic: 128, diastolic: 82 },
-  { date: "Sep 15", systolic: 125, diastolic: 80 },
-  { date: "Oct 14", systolic: 122, diastolic: 80 },
+const NAV = [
+  { href: "#features", label: "Features" },
+  { href: "#share", label: "Doctor sharing" },
+  { href: "#how-it-works", label: "How it works" },
+  { href: "#privacy", label: "Privacy & safety" },
+  { href: "#faq", label: "FAQ" },
 ];
 
-const TREND_DATA_6M = [
-  { date: "May 12", systolic: 136, diastolic: 88 },
-  { date: "Jun 04", systolic: 134, diastolic: 86 },
-  { date: "Jul 18", systolic: 130, diastolic: 84 },
-  { date: "Aug 10", systolic: 132, diastolic: 84 },
-  { date: "Aug 28", systolic: 128, diastolic: 82 },
-  { date: "Sep 15", systolic: 125, diastolic: 80 },
-  { date: "Oct 14", systolic: 122, diastolic: 80 },
+const FAQS = [
+  {
+    q: "Is HealthMate AI free to use?",
+    a: "Yes, at the moment. Records, text extraction, trend charts, reminders and doctor links are free to use. The optional AI assistant has a daily question limit.",
+  },
+  {
+    q: "Does HealthMate AI diagnose diseases or prescribe medicine?",
+    a: "Never. HealthMate AI strictly explains what is already in your records and helps you prepare questions for appointments. Treatment decisions are always between you and your qualified doctor.",
+  },
+  {
+    q: "Who can see my records and test results?",
+    a: "Only you. A doctor sees just the reports and sections you choose, through a link you create. It is read-only, it expires, you can revoke it in one tap, and every time it is opened is logged. The emergency QR is off until you turn it on.",
+  },
+  {
+    q: "How accurate is the reading of my reports?",
+    a: "Text extraction can misread a number, especially from a photo. That is why you review every value against the original file, and only values you verify feed your charts and summaries.",
+  },
+  {
+    q: "Does it work without the AI assistant?",
+    a: "Yes. Upload, extraction, trends, doses and sharing do not need AI. If the AI service is unavailable or your daily limit is reached, the assistant falls back to a built-in engine that only quotes your own records.",
+  },
+  {
+    q: "What happens if a medicine reminder is late?",
+    a: "HealthMate is a memory aid, not a safety system. Reminders appear in the app, and by email if you choose that, whenever the services are reachable. Always follow the label on your prescription.",
+  },
 ];
 
-const TREND_DATA_1Y = [
-  { date: "Nov '25", systolic: 140, diastolic: 90 },
-  { date: "Jan '26", systolic: 138, diastolic: 88 },
-  { date: "Mar '26", systolic: 135, diastolic: 86 },
-  { date: "May '26", systolic: 136, diastolic: 88 },
-  { date: "Jul '26", systolic: 130, diastolic: 84 },
-  { date: "Aug '26", systolic: 128, diastolic: 82 },
-  { date: "Sep '26", systolic: 125, diastolic: 80 },
-  { date: "Oct '26", systolic: 122, diastolic: 80 },
+const MARQUEE = [
+  "Blood tests", "Lipid panels", "HbA1c", "Thyroid", "Prescriptions", "Scans & X-rays", "Discharge summaries",
+  "Vaccination cards", "Blood pressure", "Vitamin D", "Liver function", "Kidney function",
 ];
+
+/* ---------------------------------------------------------------- small shared bits */
+
+function CtaButton({
+  children,
+  onClick,
+  variant = "solid",
+  icon = true,
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  variant?: "solid" | "light" | "outline" | "outline-dark";
+  icon?: boolean;
+}) {
+  const styles: Record<string, string> = {
+    solid: "lp-shine bg-[#087a83] bg-gradient-to-r from-[#087a83] to-[#053f44] text-white shadow-[0_14px_30px_-10px_rgba(5,63,68,0.75)] hover:shadow-[0_18px_36px_-10px_rgba(5,63,68,0.9)]",
+    light: "bg-white text-[#053f44] shadow-[0_14px_30px_-10px_rgba(0,0,0,0.5)] hover:bg-[#eef8f4]",
+    outline: "border border-[#053f44]/20 bg-white/60 text-[#053f44] backdrop-blur hover:bg-white",
+    "outline-dark": "border border-white/30 text-white hover:bg-white/10",
+  };
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.97 }}
+      className={`inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl px-6 text-[15px] font-bold transition-shadow focus-visible:outline-none focus-visible:shadow-[var(--focus)] ${styles[variant]}`}
+    >
+      <span>{children}</span>
+      {icon && <ArrowRight size={17} aria-hidden="true" />}
+    </motion.button>
+  );
+}
+
+function FeatureRow({
+  id,
+  eyebrow,
+  title,
+  body,
+  bullets,
+  art,
+  flip = false,
+  tone,
+}: {
+  id?: string;
+  eyebrow: string;
+  title: React.ReactNode;
+  body: string;
+  bullets: string[];
+  art: React.ReactNode;
+  flip?: boolean;
+  tone: "teal" | "sky" | "amber" | "violet";
+}) {
+  const glow: Record<string, string> = {
+    teal: "from-[#43b58f]/30 to-[#087a83]/10",
+    sky: "from-[#4c8dff]/25 to-[#43b58f]/10",
+    amber: "from-[#f6b64a]/30 to-[#43b58f]/10",
+    violet: "from-[#7c6cff]/25 to-[#4c8dff]/10",
+  };
+  return (
+    <div id={id} className="grid scroll-mt-28 items-center gap-10 lg:grid-cols-2 lg:gap-16">
+      <Reveal className={flip ? "lg:order-2" : ""}>
+        <SectionHeading align="left" eyebrow={eyebrow} title={title} body={body} />
+        <ul className="mt-6 space-y-3">
+          {bullets.map((b) => (
+            <li key={b} className="flex items-start gap-3 text-[15px] text-[#27434a]">
+              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#2e9b79] text-white">
+                <Check size={12} strokeWidth={3} />
+              </span>
+              {b}
+            </li>
+          ))}
+        </ul>
+      </Reveal>
+      <Reveal delay={0.1} className={`relative ${flip ? "lg:order-1" : ""}`}>
+        <div aria-hidden className={`absolute -inset-6 -z-10 rounded-[2.5rem] bg-gradient-to-br ${glow[tone]} blur-2xl`} />
+        {art}
+      </Reveal>
+    </div>
+  );
+}
+
+function Tile({ title, text, children, className = "", center = true }: { title: string; text: string; children: React.ReactNode; className?: string; center?: boolean }) {
+  return (
+    <motion.div
+      whileHover={{ y: -4 }}
+      transition={{ type: "spring", stiffness: 300, damping: 22 }}
+      className={`group relative flex flex-col overflow-hidden rounded-3xl border border-[#0b2b30]/8 bg-white p-5 shadow-[0_20px_44px_-30px_rgba(5,63,68,0.55)] ${className}`}
+    >
+      <div className={`flex-1 ${center ? "flex items-center justify-center" : ""}`}><div className="w-full">{children}</div></div>
+      <h3 className="mt-4 font-display text-lg font-extrabold text-[#0b2b30]">{title}</h3>
+      <p className="mt-1 text-sm leading-relaxed text-[#4c6168]">{text}</p>
+    </motion.div>
+  );
+}
+
+function Faq() {
+  const [open, setOpen] = useState<number | null>(0);
+  return (
+    <div className="mx-auto mt-10 max-w-3xl divide-y divide-[#0b2b30]/10 rounded-3xl border border-[#0b2b30]/8 bg-white shadow-[0_20px_44px_-30px_rgba(5,63,68,0.5)]">
+      {FAQS.map((f, i) => {
+        const isOpen = open === i;
+        return (
+          <div key={f.q}>
+            <button
+              type="button"
+              aria-expanded={isOpen}
+              aria-controls={`faq-${i}`}
+              onClick={() => setOpen(isOpen ? null : i)}
+              className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left sm:px-6"
+            >
+              <span className="font-display text-base font-bold text-[#0b2b30]">{f.q}</span>
+              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors ${isOpen ? "bg-[#087a83] text-white" : "bg-[#eef8f4] text-[#087a83]"}`}>
+                <ChevronDown size={16} className={`transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`} />
+              </span>
+            </button>
+            <AnimatePresence initial={false}>
+              {isOpen && (
+                <motion.div
+                  id={`faq-${i}`}
+                  role="region"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.28 }}
+                  className="overflow-hidden"
+                >
+                  <p className="px-5 pb-5 text-[15px] leading-relaxed text-[#4c6168] sm:px-6">{f.a}</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Steps() {
+  const ref = useRef<HTMLDivElement>(null);
+  const reduce = useReducedMotion();
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start 75%", "end 55%"] });
+  const grow = useSpring(scrollYProgress, { stiffness: 80, damping: 22 });
+  const scale = useTransform(grow, (v) => (reduce ? 1 : v));
+  const steps = [
+    { icon: <Upload size={20} />, t: "Upload or snap", d: "Add a PDF or photo of any report, prescription or scan.", tone: "teal" as const },
+    { icon: <FileSearch size={20} />, t: "Review & verify", d: "Check each extracted value against the original, then verify it.", tone: "sky" as const },
+    { icon: <TrendingUp size={20} />, t: "Track trends & doses", d: "Charts, schedules and reminders build themselves from your data.", tone: "amber" as const },
+    { icon: <QrCode size={20} />, t: "Share or ask", d: "Send a doctor a time-limited QR link, or ask the assistant.", tone: "violet" as const },
+  ];
+  return (
+    <div ref={ref} className="relative mt-14">
+      <div aria-hidden className="absolute left-[12.5%] right-[12.5%] top-7 hidden h-0.5 rounded bg-[#0b2b30]/10 lg:block">
+        <motion.span className="block h-full origin-left rounded bg-gradient-to-r from-[#43b58f] via-[#4c8dff] to-[#7c6cff]" style={{ scaleX: scale }} />
+      </div>
+      <ol className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+        {steps.map((s, i) => (
+          <Reveal as="li" key={s.t} delay={i * 0.1} className="relative text-center">
+            <div className="relative mx-auto w-fit">
+              <Bubble tone={s.tone} size={56} className="relative z-10">
+                {s.icon}
+              </Bubble>
+              <span className="absolute -right-2 -top-2 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-white text-[11px] font-extrabold text-[#053f44] shadow ring-1 ring-[#0b2b30]/10">
+                {i + 1}
+              </span>
+            </div>
+            <h3 className="mt-4 font-display text-lg font-extrabold text-[#0b2b30]">{s.t}</h3>
+            <p className="mx-auto mt-1 max-w-[250px] text-sm leading-relaxed text-[#4c6168]">{s.d}</p>
+          </Reveal>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- page */
 
 export function LandingPageView({ onGetStarted, onLogin }: LandingPageProps) {
-  // Fixed Navbar scroll tracking
-  const [isScrolled, setIsScrolled] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  // Trends demo state
-  const [selectedRange, setSelectedRange] = useState<"3M" | "6M" | "1Y">("6M");
-  const [showTable, setShowTable] = useState(false);
-
-  // FAQ accordion state
-  const [openFaq, setOpenFaq] = useState<number | null>(0);
-
-  // Active language chip
-  const [activeLang, setActiveLang] = useState<"en" | "bn" | "hi">("en");
+  const [scrolled, setScrolled] = useState(false);
+  const [menu, setMenu] = useState(false);
 
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 20);
-    };
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    handleScroll();
-    return () => window.removeEventListener("scroll", handleScroll);
+    const onScroll = () => setScrolled(window.scrollY > 16);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const activeTrendData =
-    selectedRange === "3M"
-      ? TREND_DATA_3M
-      : selectedRange === "6M"
-      ? TREND_DATA_6M
-      : TREND_DATA_1Y;
-
-  const faqs = [
-    {
-      q: "Is HealthMate AI free to use?",
-      a: "Yes. Core health tracking, document storage, OCR text extraction, timeline graphs, and QR sharing with your clinician are 100% free with synthetic privacy isolation.",
-    },
-    {
-      q: "Does HealthMate AI diagnose diseases or prescribe medicine?",
-      a: "Never. HealthMate AI strictly explains patient records and helps organize questions for your appointments. It never diagnoses or prescribes. Medical treatment decisions are always made between you and your qualified doctor.",
-    },
-    {
-      q: "Who can see my records and test results?",
-      a: "Only you and family caregivers you explicitly authorize. When you share with a clinician via QR, access is temporary, PIN-protected, read-only, and can be revoked in one tap at any second.",
-    },
-    {
-      q: "What happens if a medicine reminder is delayed?",
-      a: "HealthMate is a self-management memory aid and not a life-support system. Delivery across push, Telegram, or email may depend on network connectivity. Always adhere to your primary prescription container instructions.",
-    },
-  ];
-
   return (
-    <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] font-sans selection:bg-[var(--green-100)] selection:text-[var(--green-900)]">
-      {/* 1. Fixed Navbar with blur-on-scroll */}
+    <div className="lp relative min-h-screen overflow-x-clip bg-[#f7fbf9] font-sans selection:bg-[#43b58f]/30">
+      {/* ---------------------------------------------------------- navigation */}
       <header
-        data-scrolled={isScrolled}
+        data-scrolled={scrolled}
         className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
-          isScrolled
-            ? "bg-white/90 backdrop-blur-md border-b border-[var(--border)] shadow-sm py-2.5"
-            : "bg-white/70 backdrop-blur-xs border-b border-[var(--border)]/50 py-3.5"
+          scrolled ? "border-b border-[#0b2b30]/8 bg-white/85 py-2 shadow-[0_8px_30px_-18px_rgba(5,63,68,0.5)] backdrop-blur-xl" : "bg-transparent py-4"
         }`}
       >
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-[var(--green-800)] flex items-center justify-center text-white shadow-sm">
-              <HeartPulse className="w-5 h-5 text-emerald-300" />
-            </div>
-            <span className="font-display font-bold text-xl text-[var(--green-900)] tracking-tight">
-              HealthMate<span className="text-[var(--green-600)]">.AI</span>
+        <div className="mx-auto flex max-w-[1200px] items-center justify-between px-4 sm:px-6 lg:px-8">
+          <a href="#top" className="flex items-center gap-2.5" aria-label="HealthMate AI home">
+            <LogoMark size={38} />
+            <span className="font-display text-xl font-extrabold tracking-tight text-[#053f44]">
+              HealthMate<span className="text-[#2e9b79]"> AI</span>
             </span>
-          </div>
-
-          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-[var(--muted)]">
-            <a href="#features" className="hover:text-[var(--green-800)] transition-colors">Features</a>
-            <a href="#how-it-works" className="hover:text-[var(--green-800)] transition-colors">How it works</a>
-            <a href="#demo" className="hover:text-[var(--green-800)] transition-colors">Interactive Demo</a>
-            <a href="#privacy" className="hover:text-[var(--green-800)] transition-colors">Privacy & Safety</a>
-            <a href="#faq" className="hover:text-[var(--green-800)] transition-colors">FAQ</a>
+          </a>
+          <nav aria-label="Primary" className="hidden items-center gap-7 text-sm font-semibold text-[#3d575e] lg:flex">
+            {NAV.map((n) => (
+              <a key={n.href} href={n.href} className="relative py-1 transition-colors hover:text-[#087a83] after:absolute after:inset-x-0 after:-bottom-0.5 after:h-0.5 after:origin-left after:scale-x-0 after:rounded after:bg-[#2e9b79] after:transition-transform hover:after:scale-x-100">
+                {n.label}
+              </a>
+            ))}
           </nav>
-
-          <div className="hidden md:flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={onLogin} className="text-sm font-semibold text-[var(--green-900)]">
+          <div className="hidden items-center gap-3 lg:flex">
+            <button type="button" onClick={onLogin} className="min-h-[44px] rounded-xl px-4 text-sm font-bold text-[#053f44] transition-colors hover:bg-[#053f44]/6">
               Log in
-            </Button>
-            <Button variant="primary" size="sm" onClick={onGetStarted} className="gap-1.5 shadow-sm">
-              <span>Get started free</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Button>
-          </div>
-
-          {/* Mobile hamburger button */}
-          <div className="md:hidden flex items-center">
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 rounded-lg text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--bg)] focus-visible:ring-2 focus-visible:ring-[var(--green-600)]"
-              aria-label="Toggle Navigation Menu"
-            >
-              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
+            <CtaButton onClick={onGetStarted}>Get started free</CtaButton>
           </div>
+          <button
+            type="button"
+            className="flex h-11 w-11 items-center justify-center rounded-xl text-[#053f44] lg:hidden"
+            aria-label="Toggle navigation menu"
+            aria-expanded={menu}
+            onClick={() => setMenu((m) => !m)}
+          >
+            {menu ? <X size={24} /> : <Menu size={24} />}
+          </button>
         </div>
-
-        {/* Mobile dropdown menu */}
         <AnimatePresence>
-          {mobileMenuOpen && (
+          {menu && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="md:hidden border-b border-[var(--border)] bg-white px-4 py-4 space-y-3"
+              className="overflow-hidden border-t border-[#0b2b30]/8 bg-white/95 backdrop-blur-xl lg:hidden"
             >
-              <div className="flex flex-col space-y-2 text-sm font-medium">
-                <a href="#features" onClick={() => setMobileMenuOpen(false)} className="py-2 text-[var(--text)]">Features</a>
-                <a href="#how-it-works" onClick={() => setMobileMenuOpen(false)} className="py-2 text-[var(--text)]">How it works</a>
-                <a href="#demo" onClick={() => setMobileMenuOpen(false)} className="py-2 text-[var(--text)]">Interactive Demo</a>
-                <a href="#privacy" onClick={() => setMobileMenuOpen(false)} className="py-2 text-[var(--text)]">Privacy & Safety</a>
-                <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="py-2 text-[var(--text)]">FAQ</a>
-              </div>
-              <div className="pt-3 border-t border-[var(--border)] flex flex-col gap-2">
-                <Button variant="secondary" className="w-full justify-center" onClick={onLogin}>
-                  Log in
-                </Button>
-                <Button variant="primary" className="w-full justify-center" onClick={onGetStarted}>
-                  Get started free
-                </Button>
+              <div className="space-y-1 px-4 py-4">
+                {NAV.map((n) => (
+                  <a key={n.href} href={n.href} onClick={() => setMenu(false)} className="block rounded-xl px-3 py-3 text-base font-semibold text-[#0b2b30] hover:bg-[#eef8f4]">
+                    {n.label}
+                  </a>
+                ))}
+                <div className="flex flex-col gap-2 pt-3">
+                  <button type="button" onClick={onLogin} className="min-h-[48px] rounded-2xl border border-[#053f44]/20 font-bold text-[#053f44]">
+                    Log in
+                  </button>
+                  <button type="button" onClick={onGetStarted} className="min-h-[48px] rounded-2xl bg-gradient-to-r from-[#087a83] to-[#053f44] font-bold text-white">
+                    Get started free
+                  </button>
+                </div>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
       </header>
 
-      {/* 2. Hero Section with Depth, Blobs and HeroComposition */}
-      <section className="relative overflow-hidden pt-28 pb-20 md:pt-36 md:pb-28 lg:pt-40 lg:pb-32 bg-gradient-to-b from-green-50/80 via-white to-white">
-        {/* Blurred ambient green blobs */}
-        <div aria-hidden className="pointer-events-none absolute -top-32 -right-24 h-[520px] w-[520px] rounded-full bg-emerald-500/15 blur-3xl" />
-        <div aria-hidden className="pointer-events-none absolute top-40 -left-28 h-[400px] w-[400px] rounded-full bg-green-700/10 blur-3xl" />
+      <main id="top">
+        {/* ---------------------------------------------------------- hero */}
+        <section className="relative isolate overflow-hidden pb-16 pt-28 sm:pt-32 lg:pb-24 lg:pt-36">
+          <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-b from-[#e7f6ef] via-[#f3faf7] to-[#f7fbf9]" />
+          <div aria-hidden className="lp-dots absolute inset-0 -z-10 opacity-60 [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_72%)]" />
+          <div aria-hidden className="lp-aurora absolute -right-32 -top-24 -z-10 h-[520px] w-[520px] rounded-full bg-[radial-gradient(circle,rgba(67,181,143,0.55),transparent_65%)] blur-2xl" />
+          <div aria-hidden className="lp-aurora-b absolute -left-40 top-40 -z-10 h-[460px] w-[460px] rounded-full bg-[radial-gradient(circle,rgba(76,141,255,0.28),transparent_65%)] blur-2xl" />
 
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 relative">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
-            {/* Copy column */}
-            <div className="lg:col-span-6 space-y-6 text-left">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[var(--green-50)] text-[var(--green-900)] border border-[var(--green-600)]/20 text-xs font-semibold shadow-2xs">
-                <ShieldCheck className="w-4 h-4 text-[var(--green-600)]" />
-                <span>Private by design • Patient data isolation</span>
-              </div>
-
-              <h1 className="font-display font-bold tracking-tight text-[clamp(2.4rem,5.5vw,4.25rem)] leading-[1.08] text-[var(--green-900)]">
-                One place for your family’s health records.
-              </h1>
-
-              <p className="text-base sm:text-lg text-[var(--muted)] leading-relaxed max-w-xl font-normal">
-                Upload reports, track trends, never miss a dose, and share with your doctor by QR. No scattered papers, no lost prescriptions.
-              </p>
-
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
-                <Button
-                  variant="primary"
-                  size="lg"
-                  onClick={onGetStarted}
-                  className="gap-2 justify-center shadow-raised text-base font-semibold px-6 py-3"
+          <div className="mx-auto grid max-w-[1200px] items-center gap-12 px-4 sm:px-6 lg:grid-cols-[1.02fr_1fr] lg:gap-6 lg:px-8">
+            <div>
+              <motion.span
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="inline-flex items-center gap-2 rounded-full border border-[#2e9b79]/25 bg-white/80 px-3.5 py-1.5 text-xs font-bold text-[#087a83] shadow-sm backdrop-blur"
+              >
+                <Sparkles size={14} className="text-[#7c6cff]" />
+                Records · Reminders · Doctor sharing in one calm app
+              </motion.span>
+              <motion.h1
+                initial={{ opacity: 0, y: 22 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
+                className="mt-5 font-display text-[2.55rem] font-extrabold leading-[1.06] tracking-[-0.02em] text-[#0b2b30] sm:text-6xl lg:text-[4.1rem] [text-wrap:balance]"
+                style={{ color: "#0b2b30" }}
+              >
+                Your family’s health, <span className="lp-text-gradient">finally in one place.</span>
+              </motion.h1>
+              <motion.p
+                initial={{ opacity: 0, y: 18 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.2 }}
+                className="mt-5 max-w-xl text-lg leading-relaxed text-[#3d575e]"
+              >
+                Upload any report and HealthMate reads it for you. See trends, never miss a dose, and share with your doctor by QR, with you in control the whole time.
+              </motion.p>
+              <motion.div
+                initial={{ opacity: 0, y: 18 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.32 }}
+                className="mt-8 flex flex-col gap-3 sm:flex-row"
+              >
+                <CtaButton onClick={onGetStarted}>Get started free</CtaButton>
+                <a
+                  href="#features"
+                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl border border-[#053f44]/20 bg-white/60 px-6 text-[15px] font-bold text-[#053f44] backdrop-blur transition-colors hover:bg-white"
                 >
-                  <span>Get started free</span>
-                  <ArrowRight className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="lg"
-                  onClick={() => {
-                    document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" });
-                  }}
-                  className="justify-center text-base"
-                >
-                  See how it works
-                </Button>
-              </div>
+                  See how it works <ChevronDown size={17} aria-hidden="true" />
+                </a>
+              </motion.div>
+              <motion.ul
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.55 }}
+                className="mt-8 grid gap-3 sm:grid-cols-3"
+                aria-label="What makes HealthMate trustworthy"
+              >
+                {[
+                  { i: <Lock size={16} />, t: "Private by default" },
+                  { i: <ShieldCheck size={16} />, t: "You verify every value" },
+                  { i: <QrCode size={16} />, t: "Time-limited QR links" },
+                ].map((x) => (
+                  <li key={x.t} className="flex items-center gap-2 text-sm font-semibold text-[#27434a]">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#e3f4ec] text-[#087a83]">{x.i}</span>
+                    {x.t}
+                  </li>
+                ))}
+              </motion.ul>
+              <p className="mt-5 text-xs text-[#6f858c]">Free to use. Every screen shown on this page uses synthetic sample data.</p>
+            </div>
 
-              <div className="p-3 rounded-xl bg-white border border-[var(--border)] shadow-xs flex items-center gap-2 text-xs text-[var(--muted)] max-w-md">
-                <AlertCircle className="w-4 h-4 text-[var(--green-700)] shrink-0" />
-                <span>
-                  Demo uses synthetic data. Explains records without diagnosing.
+            <motion.div initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 1, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}>
+              <HeroScene />
+            </motion.div>
+          </div>
+        </section>
+
+        {/* ---------------------------------------------------------- marquee */}
+        <section aria-label="Documents HealthMate understands" className="border-y border-[#0b2b30]/8 bg-white py-5">
+          <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-[0.18em] text-[#8aa0a6]">Reads the paperwork you already have</p>
+          <div className="relative overflow-hidden [mask-image:linear-gradient(90deg,transparent,black_8%,black_92%,transparent)]">
+            <div className="lp-marquee flex gap-3">
+              {[...MARQUEE, ...MARQUEE].map((m, i) => (
+                <span key={i} aria-hidden={i >= MARQUEE.length} className="flex shrink-0 items-center gap-2 rounded-full border border-[#0b2b30]/8 bg-[#f4faf7] px-4 py-2 text-sm font-semibold text-[#27434a]">
+                  <FileText size={14} className="text-[#2e9b79]" />
+                  {m}
                 </span>
-              </div>
-            </div>
-
-            {/* Visual column: Rich Hero Composition */}
-            <div className="lg:col-span-6 relative flex justify-center">
-              <div className="relative w-full max-w-[500px]">
-                {/* Floating Fact Chip (top right) */}
-                <motion.div
-                  animate={{ y: [0, -6, 0] }}
-                  transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                  className="absolute -top-3 -right-2 sm:-right-4 bg-white/95 backdrop-blur px-3 py-1.5 rounded-full border border-emerald-200 shadow-md text-xs font-semibold text-emerald-800 flex items-center gap-1.5 z-30"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Verified Fact [S1]</span>
-                </motion.div>
-
-                {/* Floating QR Chip (bottom left) */}
-                <motion.div
-                  animate={{ y: [0, 6, 0] }}
-                  transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
-                  className="absolute -bottom-3 -left-2 sm:-left-4 bg-[var(--green-900)] text-white px-3 py-1.5 rounded-full shadow-md text-xs font-semibold flex items-center gap-1.5 z-30"
-                >
-                  <QrCode className="w-3.5 h-3.5 text-emerald-300" />
-                  <span>PIN: 4892 • Expires in 45m</span>
-                </motion.div>
-
-                {/* Dashboard Browser Frame */}
-                <div className="bg-white rounded-3xl border border-[var(--border)] shadow-raised overflow-hidden">
-                  {/* Browser Window Header */}
-                  <div className="px-4 py-3 bg-[var(--bg)] border-b border-[var(--border)] flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-red-400" />
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-                    </div>
-                    <span className="text-[11px] font-mono text-[var(--muted)]">healthmate.app/dashboard</span>
-                    <Badge variant="verified" size="sm">Active Session</Badge>
-                  </div>
-
-                  {/* Browser Content */}
-                  <div className="p-5 space-y-4">
-                    {/* Patient Banner */}
-                    <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
-                      <div>
-                        <p className="text-xs text-[var(--muted)]">Active Profile</p>
-                        <p className="text-sm font-semibold text-[var(--text)]">Dr. Abhijit Bhunia</p>
-                      </div>
-                      <Badge variant="info" size="sm">Primary</Badge>
-                    </div>
-
-                    {/* Vitals Summary Card */}
-                    <div className="p-4 rounded-2xl bg-[var(--green-50)] border border-[var(--green-100)]">
-                      <div className="flex items-center justify-between text-xs font-semibold text-[var(--green-900)] mb-1.5">
-                        <span className="flex items-center gap-1.5">
-                          <TrendingUp className="w-4 h-4 text-[var(--green-600)]" />
-                          Blood Pressure Trend
-                        </span>
-                        <Badge variant="verified" size="sm">Verified Fact</Badge>
-                      </div>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-2xl font-bold font-mono text-[var(--green-900)]">122 / 80</span>
-                        <span className="text-xs text-[var(--muted)]">mmHg</span>
-                        <span className="text-xs font-semibold text-[var(--green-600)] ml-auto">-6 mmHg since May</span>
-                      </div>
-
-                      {/* Mini Sparkline Curve */}
-                      <div className="mt-3 h-10 w-full">
-                        <svg viewBox="0 0 200 40" className="w-full h-full">
-                          <path
-                            d="M 10 32 Q 50 28, 90 20 T 150 14 T 190 8"
-                            fill="none"
-                            stroke="var(--green-600)"
-                            strokeWidth="2.5"
-                            strokeLinecap="round"
-                          />
-                          <circle cx="190" cy="8" r="3.5" fill="var(--green-800)" />
-                        </svg>
-                      </div>
-                    </div>
-
-                    {/* Report provenance note */}
-                    <div className="text-[11px] text-[var(--muted)] flex items-center justify-between pt-1">
-                      <span>Source: Sample Diagnostics Lab</span>
-                      <span className="text-[var(--green-700)] font-medium">Auto-extracted via OCR</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Overlapping Phone Mockup (bottom-right) */}
-                <div className="hidden sm:block absolute -bottom-8 -right-6 w-60 bg-white rounded-3xl border-2 border-[var(--border)] shadow-overlay p-4 space-y-2.5 z-20">
-                  <div className="w-12 h-1 bg-[var(--border)] rounded-full mx-auto" />
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-semibold text-[var(--muted)] uppercase tracking-wider">Morning Dose</span>
-                    <Badge variant="verified" size="sm">08:30 AM</Badge>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-2 rounded-xl bg-amber-50 text-amber-700 border border-amber-200">
-                      <Clock className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-[var(--text)]">Telmisartan 40mg</p>
-                      <p className="text-[10px] text-[var(--muted)]">With breakfast</p>
-                    </div>
-                  </div>
-                  <div className="pt-1 flex items-center justify-between text-[11px]">
-                    <span className="text-emerald-700 font-semibold flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Taken
-                    </span>
-                    <span className="text-[10px] text-[var(--muted)]">Streak: 14 days</span>
-                  </div>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* 3. Trust Strip */}
-      <section className="border-y border-[var(--border)] bg-white py-7">
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-            <div className="p-3.5 rounded-xl bg-[var(--bg)] flex items-center justify-center gap-2.5 text-xs font-semibold text-[var(--green-900)]">
-              <div className="p-1.5 rounded-lg bg-white border border-[var(--border)]">
-                <Lock className="w-4 h-4 text-[var(--green-700)] shrink-0" />
-              </div>
-              <span>Private by Default</span>
-            </div>
-            <div className="p-3.5 rounded-xl bg-[var(--bg)] flex items-center justify-center gap-2.5 text-xs font-semibold text-[var(--green-900)]">
-              <div className="p-1.5 rounded-lg bg-white border border-[var(--border)]">
-                <FileCheck className="w-4 h-4 text-[var(--green-700)] shrink-0" />
-              </div>
-              <span>You Verify Extracted Data</span>
-            </div>
-            <div className="p-3.5 rounded-xl bg-[var(--bg)] flex items-center justify-center gap-2.5 text-xs font-semibold text-[var(--green-900)]">
-              <div className="p-1.5 rounded-lg bg-white border border-[var(--border)]">
-                <Clock className="w-4 h-4 text-[var(--green-700)] shrink-0" />
-              </div>
-              <span>Time-Limited QR Sharing</span>
-            </div>
-            <div className="p-3.5 rounded-xl bg-[var(--bg)] flex items-center justify-center gap-2.5 text-xs font-semibold text-[var(--green-900)]">
-              <div className="p-1.5 rounded-lg bg-white border border-[var(--border)]">
-                <ShieldCheck className="w-4 h-4 text-[var(--green-700)] shrink-0" />
-              </div>
-              <span>Fully Usable Without AI</span>
-            </div>
-          </div>
-        </div>
-      </section>
+        {/* ---------------------------------------------------------- feature stories */}
+        <section id="features" className="scroll-mt-20 py-20 sm:py-28">
+          <div className="mx-auto max-w-[1200px] space-y-24 px-4 sm:space-y-32 sm:px-6 lg:px-8">
+            <Reveal>
+              <SectionHeading
+                eyebrow="Features"
+                title={<>Stop carrying a <span className="lp-text-gradient">folder of paper</span> to every appointment</>}
+                body="Everything from a blood test to a prescription lands in one timeline that you and your family can actually use."
+              />
+            </Reveal>
 
-      {/* 4. Problem -> Solution */}
-      <section className="py-20 md:py-28 bg-green-50/50">
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-14 space-y-3">
-            <h2 className="text-3xl md:text-4xl font-display font-bold text-[var(--green-900)] tracking-tight">
-              Stop carrying disorganized medical paperwork
-            </h2>
-            <p className="text-base text-[var(--muted)]">
-              Compare scattered physical binders and lost WhatsApp photos with one unified, clinical timeline.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
-            {/* The Old Way */}
-            <div className="p-8 rounded-3xl bg-white border border-red-200 shadow-sm space-y-5">
-              <div className="flex items-center gap-2.5 text-base font-semibold text-red-700">
-                <span className="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center text-sm">✕</span>
-                <span>The Painful Medical Paper Trail</span>
-              </div>
-              <ul className="space-y-4 text-sm text-[var(--muted)] leading-relaxed">
-                <li className="flex items-start gap-2.5">
-                  <span className="text-red-500 font-bold">•</span>
-                  <span>Heavy plastic folders taken to every doctor appointment with loose receipts.</span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <span className="text-red-500 font-bold">•</span>
-                  <span>Lab results scattered across multiple lab portals, portals, and WhatsApp chats.</span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <span className="text-red-500 font-bold">•</span>
-                  <span>No way to know if your blood sugar or cholesterol improved over the year.</span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <span className="text-red-500 font-bold">•</span>
-                  <span>Missed doses and forgotten instructions during busy mornings.</span>
-                </li>
-              </ul>
-            </div>
-
-            {/* The HealthMate Way */}
-            <div className="p-8 rounded-3xl bg-white border-2 border-[var(--green-600)] shadow-md space-y-5">
-              <div className="flex items-center gap-2.5 text-base font-semibold text-[var(--green-800)]">
-                <span className="w-7 h-7 rounded-full bg-[var(--green-100)] flex items-center justify-center text-sm">✓</span>
-                <span>The HealthMate Unified Timeline</span>
-              </div>
-              <ul className="space-y-4 text-sm text-[var(--text)] leading-relaxed">
-                <li className="flex items-start gap-2.5">
-                  <CheckCircle2 className="w-5 h-5 text-[var(--green-600)] shrink-0" />
-                  <span>Snap a photo: OCR automatically structures every observation point.</span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <CheckCircle2 className="w-5 h-5 text-[var(--green-600)] shrink-0" />
-                  <span>Longitudinal trend graphs with clinical reference bands at a glance.</span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <CheckCircle2 className="w-5 h-5 text-[var(--green-600)] shrink-0" />
-                  <span>Interactive dose cards with discreet mode and Telegram care reminders.</span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <CheckCircle2 className="w-5 h-5 text-[var(--green-600)] shrink-0" />
-                  <span>30-second doctor sharing by QR without giving up permanent access.</span>
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 5. How It Works (With Connector Line) */}
-      <section id="how-it-works" className="py-20 md:py-28 bg-white border-y border-[var(--border)] relative">
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-16 space-y-3">
-            <h2 className="text-3xl md:text-4xl font-display font-bold text-[var(--green-900)] tracking-tight">
-              How HealthMate works in 4 simple steps
-            </h2>
-            <p className="text-base text-[var(--muted)]">
-              From raw paper prescription to informed doctor consultation.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 relative">
-            {/* Desktop Connector Line */}
-            <div
-              aria-hidden
-              className="hidden md:block absolute top-12 left-12 right-12 h-0.5 bg-gradient-to-r from-emerald-200 via-green-300 to-emerald-200 -z-0"
+            <FeatureRow
+              tone="teal"
+              eyebrow="Records"
+              title={<>Upload once. HealthMate <span className="lp-text-gradient">reads it for you.</span></>}
+              body="Drop in a PDF or a photo of a report. The text is extracted automatically, and you check each value against the original before it is trusted."
+              bullets={["PDFs, photos and scans (JPG, PNG)", "The original file sits beside every value", "Add vitals and results by hand, too"]}
+              art={<ScanDemo />}
             />
+            <FeatureRow
+              tone="sky"
+              flip
+              eyebrow="Trends"
+              title={<>See what is <span className="lp-text-gradient">changing,</span> not just today’s number</>}
+              body="Verified results become trend charts with the reference range printed on your report, so a rising or falling value is easy to spot."
+              bullets={["Reference ranges exactly as printed", "Every point links back to its source report", "Export a PDF or CSV whenever you need"]}
+              art={<TrendDemo />}
+            />
+            <FeatureRow
+              tone="amber"
+              eyebrow="Medicines"
+              title={<>Never miss a dose, <span className="lp-text-gradient">never guess.</span></>}
+              body="Set the times and days for each medicine, log doses as taken, skipped or snoozed, and see your week at a glance."
+              bullets={["Daily dose schedule with one-tap logging", "7-day adherence summary", "In-app reminders, plus optional email"]}
+              art={<DoseDemo />}
+            />
+            <FeatureRow
+              tone="violet"
+              flip
+              eyebrow="Assistant"
+              title={<>Ask your records, <span className="lp-text-gradient">not the internet.</span></>}
+              body="Questions are answered from your own uploaded reports, with citations you can open. If the records do not say, it tells you so."
+              bullets={["Every statement cites its source", "Never diagnoses or prescribes", "Keeps working if the AI service is unavailable"]}
+              art={<AssistantDemo />}
+            />
+          </div>
+        </section>
 
-            <div className="p-6 rounded-2xl bg-[var(--bg)] border border-[var(--border)] space-y-3 relative z-10 hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 rounded-2xl bg-[var(--green-800)] text-white font-bold flex items-center justify-center text-base shadow-sm">
-                1
-              </div>
-              <h3 className="font-semibold text-lg text-[var(--text)]">Upload or Scan</h3>
-              <p className="text-xs sm:text-sm text-[var(--muted)] leading-relaxed">
-                Drop your PDF or take a camera photo of your lab test or prescription report.
-              </p>
-            </div>
-
-            <div className="p-6 rounded-2xl bg-[var(--bg)] border border-[var(--border)] space-y-3 relative z-10 hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 rounded-2xl bg-[var(--green-800)] text-white font-bold flex items-center justify-center text-base shadow-sm">
-                2
-              </div>
-              <h3 className="font-semibold text-lg text-[var(--text)]">Review Extracted Data</h3>
-              <p className="text-xs sm:text-sm text-[var(--muted)] leading-relaxed">
-                Check OCR-extracted numbers side-by-side with original document pages before confirming.
-              </p>
-            </div>
-
-            <div className="p-6 rounded-2xl bg-[var(--bg)] border border-[var(--border)] space-y-3 relative z-10 hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 rounded-2xl bg-[var(--green-800)] text-white font-bold flex items-center justify-center text-base shadow-sm">
-                3
-              </div>
-              <h3 className="font-semibold text-lg text-[var(--text)]">Track Trends & Doses</h3>
-              <p className="text-xs sm:text-sm text-[var(--muted)] leading-relaxed">
-                Watch vitals over 3M, 6M, or 1Y intervals. Log taken medicines with one tap.
-              </p>
-            </div>
-
-            <div className="p-6 rounded-2xl bg-[var(--bg)] border border-[var(--border)] space-y-3 relative z-10 hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 rounded-2xl bg-[var(--green-800)] text-white font-bold flex items-center justify-center text-base shadow-sm">
-                4
-              </div>
-              <h3 className="font-semibold text-lg text-[var(--text)]">Share with Your Doctor</h3>
-              <p className="text-xs sm:text-sm text-[var(--muted)] leading-relaxed">
-                Generate a temporary QR pack. Your clinician views records in seconds, expiring on departure.
-              </p>
+        {/* ---------------------------------------------------------- bento */}
+        <section className="relative bg-gradient-to-b from-[#f7fbf9] via-[#eaf6f0] to-[#f7fbf9] py-20 sm:py-24">
+          <div className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8">
+            <Reveal>
+              <SectionHeading
+                eyebrow="Built for the whole family"
+                title="Everything around the records, too"
+                body="Profiles for each person, an emergency card, symptom notes, appointments and a visit pack for the doctor."
+              />
+            </Reveal>
+            <div className="mt-12 grid gap-5 lg:grid-cols-6">
+              <Reveal className="lg:col-span-4">
+                <Tile center={false} title="Family profiles" text="Care for parents and children from one login. Each profile keeps its own records, doses and sharing." className="h-full">
+                  <FamilyDemo />
+                </Tile>
+              </Reveal>
+              <Reveal delay={0.08} className="lg:col-span-2">
+                <Tile title="Emergency card" text="A printable card with a QR first responders can scan without logging in. It stays off until you switch it on." className="h-full">
+                  <EmergencyMini />
+                </Tile>
+              </Reveal>
+              <Reveal className="lg:col-span-2">
+                <Tile title="Doctor visit pack" text="One summary PDF of results, trends, medicines and your questions." className="h-full">
+                  <VisitPackMini />
+                </Tile>
+              </Reveal>
+              <Reveal delay={0.08} className="lg:col-span-2">
+                <Tile title="Symptom diary" text="Note how you felt and choose what goes into the visit pack." className="h-full">
+                  <SymptomMini />
+                </Tile>
+              </Reveal>
+              <Reveal delay={0.16} className="lg:col-span-2">
+                <Tile title="Appointments & checklists" text="A calendar with a preparation checklist for every visit." className="h-full">
+                  <ApptMini />
+                </Tile>
+              </Reveal>
+              <Reveal className="lg:col-span-3">
+                <Tile title="English, বাংলা and हिन्दी" text="Switch language any time, and turn on Simple mode for larger, easier text." className="h-full">
+                  <LanguageMini />
+                </Tile>
+              </Reveal>
+              <Reveal delay={0.08} className="lg:col-span-3">
+                <Tile title="Yours to export or delete" text="Download everything as a file, or delete your account and data whenever you decide." className="h-full">
+                  <div className="flex h-full items-center gap-3" aria-hidden="true">
+                    <span className="flex flex-1 items-center gap-3 rounded-2xl bg-[#eef8f4] p-4">
+                      <Bubble tone="teal" size={42}><Download size={20} /></Bubble>
+                      <span><b className="block text-sm text-[#0b2b30]">Export</b><span className="text-xs text-[#4c6168]">All your data</span></span>
+                    </span>
+                    <span className="flex flex-1 items-center gap-3 rounded-2xl bg-[#fff1ee] p-4">
+                      <Bubble tone="coral" size={42}><Trash2 size={20} /></Bubble>
+                      <span><b className="block text-sm text-[#0b2b30]">Delete</b><span className="text-xs text-[#4c6168]">Gone for good</span></span>
+                    </span>
+                  </div>
+                </Tile>
+              </Reveal>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* 6. True Bento Grid with Live Previews */}
-      <section id="features" className="py-20 md:py-28 bg-[var(--bg)]">
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-14 space-y-3">
-            <h2 className="text-3xl md:text-4xl font-display font-bold text-[var(--green-900)] tracking-tight">
-              Complete care toolkit built for real families
-            </h2>
-            <p className="text-base text-[var(--muted)]">
-              Engineered with medical privacy, elder simplicity, and multi-profile flexibility.
-            </p>
+        {/* ---------------------------------------------------------- doctor sharing (dark) */}
+        <section id="share" className="relative isolate scroll-mt-20 overflow-hidden bg-[#04282c] py-20 text-white sm:py-28">
+          <div aria-hidden className="lp-grid-dark absolute inset-0 -z-10 opacity-70 [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]" />
+          <div aria-hidden className="lp-aurora absolute -left-24 top-10 -z-10 h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle,rgba(67,181,143,0.45),transparent_65%)] blur-2xl" />
+          <div aria-hidden className="lp-aurora-b absolute -right-24 bottom-0 -z-10 h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle,rgba(76,141,255,0.35),transparent_65%)] blur-2xl" />
+          <div className="mx-auto max-w-[1100px] px-4 sm:px-6 lg:px-8">
+            <Reveal>
+              <SectionHeading
+                dark
+                eyebrow="Doctor sharing"
+                title={<>Share with your doctor in <span className="lp-text-gradient-light">30 seconds</span> by QR</>}
+                body="Pick what to share and for how long. Your doctor scans the code and sees a read-only page. When you are done, revoke it."
+              />
+            </Reveal>
+            <Reveal delay={0.1} className="mt-12">
+              <QrShareDemo />
+            </Reveal>
+            <Reveal delay={0.15}>
+              <ul className="mt-10 grid gap-3 text-sm text-white/80 sm:grid-cols-3">
+                {["Doctors need no account or app", "Every time the link is opened is logged for you", "Expired or revoked links show a plain “not available” page"].map((t) => (
+                  <li key={t} className="flex items-start gap-2 rounded-2xl bg-white/6 p-4">
+                    <Check size={16} className="mt-0.5 shrink-0 text-[#9ff0d2]" /> {t}
+                  </li>
+                ))}
+              </ul>
+            </Reveal>
           </div>
+        </section>
 
-          {/* Real Bento Grid: differing column/row spans with live mini-UIs */}
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-6">
-            {/* 1. Records + OCR (3 cols, 2 rows) */}
-            <div className="md:col-span-3 md:row-span-2 p-6 rounded-3xl bg-white border border-[var(--border)] hover:border-[var(--green-600)] hover:shadow-raised transition-all flex flex-col justify-between">
-              <div>
-                <div className="w-12 h-12 rounded-2xl bg-[var(--green-100)] flex items-center justify-center text-[var(--green-800)] mb-4">
-                  <FileText className="w-6 h-6" />
-                </div>
-                <h3 className="font-display font-bold text-xl text-[var(--text)] mb-2">Records & OCR</h3>
-                <p className="text-sm text-[var(--muted)] leading-relaxed mb-4">
-                  Verified text extraction for lab reports and discharge summaries with side-by-side page provenance.
-                </p>
-              </div>
-
-              {/* Mini Split-Review Mockup */}
-              <div className="p-4 rounded-2xl bg-[var(--bg)] border border-[var(--border)] space-y-3">
-                <div className="flex items-center justify-between text-xs text-[var(--muted)]">
-                  <span className="font-mono">SampleLab_Metabolic.pdf</span>
-                  <Badge variant="verified" size="sm">Provenance Verified</Badge>
-                </div>
-                <div className="space-y-2 text-xs">
-                  <div className="p-2.5 rounded-xl bg-white border border-[var(--border)] flex items-center justify-between">
-                    <span>Fasting Glucose</span>
-                    <span className="font-mono font-bold text-[var(--green-900)]">94 mg/dL</span>
-                    <span className="text-[10px] text-emerald-600 font-semibold">[70 - 99] ✓</span>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-white border border-[var(--border)] flex items-center justify-between">
-                    <span>HbA1c</span>
-                    <span className="font-mono font-bold text-[var(--green-900)]">6.8 %</span>
-                    <span className="text-[10px] text-amber-600 font-semibold">[Pre-diabetic] ✓</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* 2. Trends (3 cols, 1 row) */}
-            <div className="md:col-span-3 md:row-span-1 p-6 rounded-3xl bg-white border border-[var(--border)] hover:border-[var(--green-600)] hover:shadow-raised transition-all flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-[var(--green-100)] flex items-center justify-center text-[var(--green-800)]">
-                    <TrendingUp className="w-5 h-5" />
-                  </div>
-                  <Badge variant="verified" size="sm">-8 mmHg past 3 months</Badge>
-                </div>
-                <h3 className="font-display font-bold text-lg text-[var(--text)] mb-1">Trend Graphs</h3>
-                <p className="text-xs text-[var(--muted)] leading-relaxed">
-                  Longitudinal charts with healthy reference corridors, delta chips, and tabular alternatives for accessibility.
-                </p>
-              </div>
-
-              {/* Mini area chart */}
-              <div className="h-14 w-full mt-3 bg-[var(--green-50)] rounded-xl p-2 flex items-center">
-                <svg viewBox="0 0 300 40" className="w-full h-full">
-                  <path d="M 0 30 Q 75 25, 150 18 T 300 10" fill="none" stroke="var(--green-600)" strokeWidth="3" />
-                  <circle cx="300" cy="10" r="4" fill="var(--green-800)" />
-                </svg>
-              </div>
-            </div>
-
-            {/* 3. Medicine Schedules (2 cols, 1 row) */}
-            <div className="md:col-span-2 md:row-span-1 p-6 rounded-3xl bg-white border border-[var(--border)] hover:border-[var(--green-600)] hover:shadow-raised transition-all flex flex-col justify-between">
-              <div>
-                <div className="w-10 h-10 rounded-xl bg-[var(--green-100)] flex items-center justify-center text-[var(--green-800)] mb-3">
-                  <Clock className="w-5 h-5" />
-                </div>
-                <h3 className="font-display font-bold text-lg text-[var(--text)] mb-1">Medicine Schedules</h3>
-                <p className="text-xs text-[var(--muted)] leading-relaxed">
-                  Taken / Skip / Snooze logging, refill trackers, and discrete notification masking for privacy.
-                </p>
-              </div>
-
-              <div className="p-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-between mt-3 text-xs">
-                <div>
-                  <p className="font-semibold text-[var(--text)]">Metformin 500mg</p>
-                  <p className="text-[10px] text-[var(--muted)]">After lunch</p>
-                </div>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">Taken ✓</span>
-              </div>
-            </div>
-
-            {/* 4. Emergency Card (1 col, 1 row) */}
-            <div className="md:col-span-1 md:row-span-1 p-5 rounded-3xl bg-white border border-[var(--border)] hover:border-[var(--green-600)] hover:shadow-raised transition-all flex flex-col justify-between text-center">
-              <div>
-                <div className="w-10 h-10 rounded-xl bg-[var(--green-100)] flex items-center justify-center text-[var(--green-800)] mb-2 mx-auto">
-                  <ShieldCheck className="w-5 h-5" />
-                </div>
-                <h3 className="font-display font-bold text-sm text-[var(--text)] mb-1">Emergency Card</h3>
-                <p className="text-[11px] text-[var(--muted)]">First responders</p>
-              </div>
-              <div className="p-2 rounded-xl bg-red-50 border border-red-100 text-[11px] font-bold text-red-800">
-                Blood O+
-              </div>
-            </div>
-
-            {/* 5. Doctor Visit Pack (2 cols, 1 row) */}
-            <div className="md:col-span-2 md:row-span-1 p-6 rounded-3xl bg-white border border-[var(--border)] hover:border-[var(--green-600)] hover:shadow-raised transition-all flex flex-col justify-between">
-              <div>
-                <div className="w-10 h-10 rounded-xl bg-[var(--green-100)] flex items-center justify-center text-[var(--green-800)] mb-3">
-                  <Stethoscope className="w-5 h-5" />
-                </div>
-                <h3 className="font-display font-bold text-lg text-[var(--text)] mb-1">Doctor Visit Pack</h3>
-                <p className="text-xs text-[var(--muted)] leading-relaxed">
-                  Export 2-page print summaries and discussion questions tailored to your upcoming medical appointment.
-                </p>
-              </div>
-
-              <div className="p-2.5 rounded-xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-between mt-3 text-xs">
-                <span className="font-semibold text-[var(--text)]">Consultation Brief</span>
-                <span className="text-[var(--green-700)] font-mono text-[11px]">2 Pages • PDF</span>
-              </div>
-            </div>
-
-            {/* 6. Family & Caregivers (4 cols, 1 row) */}
-            <div className="md:col-span-4 md:row-span-1 p-6 rounded-3xl bg-white border border-[var(--border)] hover:border-[var(--green-600)] hover:shadow-raised transition-all flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-[var(--green-100)] flex items-center justify-center text-[var(--green-800)]">
-                    <Users className="w-5 h-5" />
-                  </div>
-                  <Badge variant="info" size="sm">Multi-Profile Care</Badge>
-                </div>
-                <h3 className="font-display font-bold text-lg text-[var(--text)] mb-1">Family & Caregivers</h3>
-                <p className="text-xs text-[var(--muted)] leading-relaxed">
-                  Manage elders and children under one account with strictly separated health records and consent tracking.
-                </p>
-              </div>
-
-              {/* Multi-avatar preview */}
-              <div className="grid grid-cols-3 gap-2 mt-3">
-                <div className="p-2 rounded-xl bg-[var(--bg)] border border-[var(--border)] flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-full bg-[var(--green-700)] text-white text-xs font-bold flex items-center justify-center">A</div>
-                  <span className="text-xs font-semibold truncate">Dr. Abhijit</span>
-                </div>
-                <div className="p-2 rounded-xl bg-[var(--bg)] border border-[var(--border)] flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-full bg-[var(--green-800)] text-white text-xs font-bold flex items-center justify-center">M</div>
-                  <span className="text-xs font-semibold truncate">Anima (Mother)</span>
-                </div>
-                <div className="p-2 rounded-xl bg-[var(--bg)] border border-[var(--border)] flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-full bg-[var(--green-600)] text-white text-xs font-bold flex items-center justify-center">C</div>
-                  <span className="text-xs font-semibold truncate">Aarav (Child)</span>
-                </div>
-              </div>
-            </div>
+        {/* ---------------------------------------------------------- how it works */}
+        <section id="how-it-works" className="scroll-mt-20 py-20 sm:py-28">
+          <div className="mx-auto max-w-[1100px] px-4 sm:px-6 lg:px-8">
+            <Reveal>
+              <SectionHeading eyebrow="How it works" title="Four steps from paper to peace of mind" body="Most people are set up in a few minutes." />
+            </Reveal>
+            <Steps />
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* 7. Interactive Trend Visualization with Recharts */}
-      <section id="demo" className="py-20 md:py-28 bg-white border-y border-[var(--border)]">
-        <div className="max-w-[1000px] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-xl mx-auto mb-10 space-y-3">
-            <h2 className="text-3xl md:text-4xl font-display font-bold text-[var(--green-900)] tracking-tight">
-              Interactive Trend Visualization
-            </h2>
-            <p className="text-base text-[var(--muted)]">
-              Experience how your physiological parameters are mapped over time.
-            </p>
-          </div>
-
-          <Card className="p-6 md:p-8 bg-[var(--surface)] border-[var(--green-600)]/30 shadow-md rounded-3xl">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-[var(--border)] pb-5">
-              <div>
-                <h3 className="font-semibold text-base sm:text-lg text-[var(--text)] flex items-center gap-2">
-                  <span>Systolic Blood Pressure (Synthetic Demo)</span>
-                  <Badge variant="verified" size="sm">Verified Fact</Badge>
-                </h3>
-                <p className="text-xs sm:text-sm text-[var(--muted)] mt-0.5">Reference normal: 90 - 120 mmHg</p>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setShowTable(!showTable)}
-                  className="px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs font-semibold text-[var(--muted)] hover:text-[var(--text)] flex items-center gap-1.5 transition-colors"
-                  aria-label="Toggle Accessible Table"
-                >
-                  <TableIcon className="w-3.5 h-3.5" />
-                  <span>{showTable ? "Hide Table" : "Table View"}</span>
-                </button>
-
-                <div className="flex items-center gap-1 bg-[var(--bg)] p-1 rounded-xl border border-[var(--border)]">
-                  {(["3M", "6M", "1Y"] as const).map((r) => (
-                    <button
-                      key={r}
-                      onClick={() => setSelectedRange(r)}
-                      className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                        selectedRange === r
-                          ? "bg-white text-[var(--green-900)] shadow-2xs font-bold"
-                          : "text-[var(--muted)] hover:text-[var(--text)]"
-                      }`}
-                    >
-                      {r}
-                    </button>
+        {/* ---------------------------------------------------------- privacy & safety */}
+        <section id="privacy" className="scroll-mt-20 pb-20 sm:pb-28">
+          <div className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8">
+            <div className="grid items-center gap-8 overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-[#053f44] via-[#065961] to-[#087a83] p-6 text-white shadow-[0_50px_90px_-40px_rgba(5,63,68,0.9)] sm:p-10 lg:grid-cols-[0.8fr_1.2fr] lg:p-14">
+              <Reveal>
+                <ShieldArt />
+              </Reveal>
+              <Reveal delay={0.1}>
+                <SectionHeading
+                  dark
+                  align="left"
+                  eyebrow="Privacy & safety"
+                  title="Built around your trust, not around your data"
+                  body="HealthMate AI is a memory and organisation tool. It is careful about what it shows, to whom, and what it claims."
+                />
+                <div className="mt-7 grid gap-3 sm:grid-cols-2">
+                  {[
+                    { i: <Lock size={18} />, t: "You own your data", d: "Export it or delete it whenever you like." },
+                    { i: <Stethoscope size={18} />, t: "Never diagnoses", d: "Explains your records and never prescribes." },
+                    { i: <QrCode size={18} />, t: "Sharing you control", d: "Read-only, time-limited and revocable." },
+                    { i: <Users size={18} />, t: "Profiles stay separate", d: "Each family member’s records are kept apart." },
+                  ].map((c) => (
+                    <div key={c.t} className="lp-glass-dark rounded-2xl p-4">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/12 text-[#9ff0d2]">{c.i}</span>
+                      <p className="mt-3 font-display text-base font-bold">{c.t}</p>
+                      <p className="mt-0.5 text-sm text-white/70">{c.d}</p>
+                    </div>
                   ))}
                 </div>
-              </div>
+              </Reveal>
             </div>
+          </div>
+        </section>
 
-            {/* Recharts Area Chart */}
-            <div className="py-6 space-y-4">
-              {!showTable ? (
-                <div className="w-full h-[280px]">
-                  <ResponsiveContainer width="100%" height={280}>
-                    <AreaChart data={activeTrendData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="rechartsTrendGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#15803d" stopOpacity={0.35} />
-                          <stop offset="100%" stopColor="#15803d" stopOpacity={0.0} />
-                        </linearGradient>
-                      </defs>
-                      <ReferenceArea y1={90} y2={120} fill="#dcfce7" fillOpacity={0.6} />
-                      <XAxis dataKey="date" tickLine={false} axisLine={{ stroke: "#e5e7eb" }} tick={{ fontSize: 12, fill: "#6b7280" }} />
-                      <YAxis domain={[80, 160]} tickLine={false} axisLine={{ stroke: "#e5e7eb" }} tick={{ fontSize: 12, fill: "#6b7280" }} />
-                      <Tooltip
-                        content={({ active, payload }) => {
-                          if (active && payload && payload.length) {
-                            const data = payload[0].payload;
-                            return (
-                              <div className="p-3 bg-white rounded-xl shadow-lg border border-[var(--border)] text-xs space-y-1">
-                                <p className="font-bold text-[var(--text)]">{data.date}</p>
-                                <p className="text-[var(--green-900)] font-semibold">
-                                  Systolic: {data.systolic} mmHg
-                                </p>
-                                <p className="text-emerald-700 font-medium">Normal corridor: 90 - 120 mmHg</p>
-                              </div>
-                            );
-                          }
-                          return null;
-                        }}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="systolic"
-                        stroke="#15803d"
-                        strokeWidth={3}
-                        fill="url(#rechartsTrendGrad)"
-                        isAnimationActive={true}
-                        animationDuration={600}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <div className="overflow-x-auto py-2">
-                  <table className="w-full text-left text-xs border-collapse" aria-label="Blood Pressure Trend Data">
-                    <thead>
-                      <tr className="border-b border-[var(--border)] text-[var(--muted)]">
-                        <th className="py-2 px-3 font-semibold">Date</th>
-                        <th className="py-2 px-3 font-semibold">Systolic (mmHg)</th>
-                        <th className="py-2 px-3 font-semibold">Normal Range</th>
-                        <th className="py-2 px-3 font-semibold">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activeTrendData.map((row, i) => (
-                        <tr key={i} className="border-b border-[var(--border)]/60 hover:bg-[var(--bg)]">
-                          <td className="py-2 px-3 font-medium text-[var(--text)]">{row.date}</td>
-                          <td className="py-2 px-3 font-mono font-bold text-[var(--green-900)]">{row.systolic}</td>
-                          <td className="py-2 px-3 text-[var(--muted)]">90 - 120</td>
-                          <td className="py-2 px-3">
-                            <Badge variant={row.systolic <= 120 ? "verified" : "review"} size="sm">
-                              {row.systolic <= 120 ? "Normal" : "Elevated"}
-                            </Badge>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+        {/* ---------------------------------------------------------- FAQ */}
+        <section id="faq" className="scroll-mt-20 bg-white pb-20 pt-20 sm:pb-28 sm:pt-24">
+          <div className="mx-auto max-w-[1100px] px-4 sm:px-6 lg:px-8">
+            <Reveal>
+              <SectionHeading eyebrow="FAQ" title="Questions people ask first" />
+            </Reveal>
+            <Faq />
+          </div>
+        </section>
 
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-[var(--muted)] pt-3 border-t border-[var(--border)]">
-                <span>Earliest: {activeTrendData[0]?.systolic} mmHg</span>
-                <span className="font-semibold text-[var(--green-700)] bg-[var(--green-50)] px-3 py-1 rounded-full border border-[var(--green-100)]">
-                  -8 mmHg since March (Consistent Improvement)
-                </span>
-                <span className="font-semibold text-[var(--text)]">
-                  Latest: {activeTrendData[activeTrendData.length - 1]?.systolic} mmHg
-                </span>
-              </div>
-            </div>
-          </Card>
-        </div>
-      </section>
-
-      {/* 8. Doctor QR Section */}
-      <section className="py-20 md:py-28 bg-green-50/50">
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-            <div className="lg:col-span-6 space-y-6">
-              <Badge variant="verified" size="md">Clinician Portal</Badge>
-              <h2 className="text-3xl md:text-4xl font-display font-bold text-[var(--green-900)] tracking-tight">
-                Share with your doctor in 30 seconds by QR
+        {/* ---------------------------------------------------------- final CTA */}
+        <section className="relative isolate overflow-hidden bg-[#04282c] py-20 text-center text-white sm:py-28">
+          <div aria-hidden className="lp-grid-dark absolute inset-0 -z-10 opacity-60 [mask-image:radial-gradient(ellipse_at_center,black,transparent_72%)]" />
+          <div aria-hidden className="lp-aurora absolute left-1/2 top-1/2 -z-10 h-[520px] w-[760px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(ellipse,rgba(67,181,143,0.5),rgba(76,141,255,0.22)_50%,transparent_70%)] blur-3xl" />
+          <div className="mx-auto max-w-3xl px-4">
+            <Reveal>
+              <Bubble tone="emerald" size={60} className="lp-float mx-auto">
+                <HeartPulse size={28} />
+              </Bubble>
+              <h2 className="mt-6 font-display text-4xl font-extrabold leading-tight sm:text-5xl" style={{ color: "#fff" }}>
+                Start organising your family’s health today.
               </h2>
-              <p className="text-base text-[var(--muted)] leading-relaxed">
-                During your consultation, show the dynamic QR code on your phone screen. The doctor scans using any camera or browser to view a structured, read-only summary.
-              </p>
-
-              <div className="space-y-3.5 text-sm text-[var(--text)]">
-                <div className="flex items-center gap-2.5">
-                  <CheckCircle2 className="w-5 h-5 text-[var(--green-600)]" />
-                  <span>No apps or logins required for the doctor.</span>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <CheckCircle2 className="w-5 h-5 text-[var(--green-600)]" />
-                  <span>Configurable expiry (1 hour, 24 hours, or 7 days).</span>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <CheckCircle2 className="w-5 h-5 text-[var(--green-600)]" />
-                  <span>Revoke in one tap whenever you walk out of the clinic.</span>
-                </div>
+              <p className="mx-auto mt-4 max-w-xl text-lg text-white/70">Create a free account, add your first report, and have everything ready for the next appointment.</p>
+              <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+                <CtaButton variant="light" onClick={onGetStarted}>Get started free</CtaButton>
+                <CtaButton variant="outline-dark" icon={false} onClick={onLogin}>I already have an account</CtaButton>
               </div>
-            </div>
-
-            <div className="lg:col-span-6 flex justify-center">
-              <div className="p-8 bg-white rounded-3xl border border-[var(--border)] shadow-raised max-w-sm text-center space-y-5 w-full">
-                <div className="w-48 h-48 mx-auto bg-[var(--bg)] rounded-2xl border-2 border-dashed border-[var(--green-600)] flex items-center justify-center p-3">
-                  <QrCode className="w-36 h-36 text-[var(--green-900)]" />
-                </div>
-                <div>
-                  <p className="font-semibold text-base text-[var(--text)]">Dr. Consultation Share Session</p>
-                  <p className="text-xs text-[var(--muted)] mt-1">PIN Protected: <strong className="font-mono text-sm text-[var(--text)]">4892</strong></p>
-                </div>
-                <Badge variant="neutral" size="sm">Expires in 58 minutes</Badge>
-              </div>
-            </div>
+            </Reveal>
           </div>
-        </div>
-      </section>
+        </section>
+      </main>
 
-      {/* 9. Family & Caregivers */}
-      <section className="py-20 md:py-28 bg-white border-y border-[var(--border)]">
-        <div className="max-w-[1000px] mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-10">
-          <div className="space-y-3">
-            <h2 className="text-3xl md:text-4xl font-display font-bold text-[var(--green-900)] tracking-tight">
-              Caring for aging parents and children
-            </h2>
-            <p className="text-base text-[var(--muted)] max-w-xl mx-auto">
-              Switch seamlessly between parent, spouse, and child profiles without data cross-contamination.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap justify-center gap-6">
-            <div className="p-6 rounded-3xl bg-[var(--bg)] border border-[var(--border)] text-center w-48 space-y-3 hover:shadow-md transition-shadow">
-              <div className="w-14 h-14 rounded-full bg-[var(--green-700)] text-white font-bold flex items-center justify-center mx-auto text-lg shadow-sm">
-                A
-              </div>
-              <div>
-                <p className="text-base font-semibold text-[var(--text)]">Dr. Abhijit</p>
-                <p className="text-xs text-[var(--muted)]">Self</p>
-              </div>
-              <Badge variant="info" size="sm">Primary</Badge>
-            </div>
-
-            <div className="p-6 rounded-3xl bg-[var(--bg)] border border-[var(--border)] text-center w-48 space-y-3 hover:shadow-md transition-shadow">
-              <div className="w-14 h-14 rounded-full bg-[var(--green-800)] text-white font-bold flex items-center justify-center mx-auto text-lg shadow-sm">
-                M
-              </div>
-              <div>
-                <p className="text-base font-semibold text-[var(--text)]">Anima (Mother)</p>
-                <p className="text-xs text-[var(--muted)]">Dependent</p>
-              </div>
-              <Badge variant="verified" size="sm">Authorized</Badge>
-            </div>
-
-            <div className="p-6 rounded-3xl bg-[var(--bg)] border border-[var(--border)] text-center w-48 space-y-3 hover:shadow-md transition-shadow">
-              <div className="w-14 h-14 rounded-full bg-[var(--green-600)] text-white font-bold flex items-center justify-center mx-auto text-lg shadow-sm">
-                A
-              </div>
-              <div>
-                <p className="text-base font-semibold text-[var(--text)]">Aarav (Child)</p>
-                <p className="text-xs text-[var(--muted)]">Dependent</p>
-              </div>
-              <Badge variant="verified" size="sm">Authorized</Badge>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 10. AI Assistant Grounding Preview */}
-      <section className="py-20 md:py-28 bg-[var(--bg)]">
-        <div className="max-w-[800px] mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          <div className="text-center space-y-3">
-            <Badge variant="verified" size="md">Strict Evidence Grounding</Badge>
-            <h2 className="text-3xl md:text-4xl font-display font-bold text-[var(--green-900)] tracking-tight">
-              Ask questions about your records safely
-            </h2>
-            <p className="text-base text-[var(--muted)]">
-              Every answer points directly to verified laboratory excerpts with source citations.
-            </p>
-          </div>
-
-          {/* Assistant Chat Mockup */}
-          <div className="p-6 md:p-8 bg-white rounded-3xl border border-[var(--border)] shadow-raised space-y-4">
-            <div className="flex justify-end">
-              <div className="rounded-2xl rounded-tr-sm bg-[var(--green-800)] text-white p-4 text-xs sm:text-sm font-medium max-w-[85%] shadow-sm">
-                What was my latest HbA1c result?
-              </div>
-            </div>
-
-            <div className="p-5 rounded-2xl bg-[var(--green-50)] border border-[var(--green-100)] text-xs sm:text-sm text-[var(--text)] space-y-3">
-              <p className="leading-relaxed">
-                According to your verified Sample Diagnostics Lab Glycemic Panel from 14 October 2026, your HbA1c was <strong>6.8%</strong> <span className="px-2 py-0.5 rounded bg-[var(--green-100)] text-[var(--green-900)] font-bold">[S1]</span>.
-              </p>
-              <div className="pt-3 border-t border-[var(--border)] text-xs text-[var(--muted)] flex items-center justify-between">
-                <span>[S1] Page 2, Routine Checkup PDF</span>
-                <span className="text-[var(--green-700)] font-semibold">Answers come only from your verified records</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 11. Privacy & Safety Pillars */}
-      <section id="privacy" className="py-20 md:py-28 bg-white border-y border-[var(--border)]">
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-xl mx-auto mb-14 space-y-3">
-            <h2 className="text-3xl md:text-4xl font-display font-bold text-[var(--green-900)] tracking-tight">
-              Medical safety and privacy commitments
-            </h2>
-            <p className="text-base text-[var(--muted)]">
-              Zero monetization of health data. Complete user control.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
-            <div className="p-8 rounded-3xl bg-[var(--bg)] border border-[var(--border)] space-y-3.5 hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 rounded-2xl bg-white border border-[var(--border)] flex items-center justify-center text-[var(--green-800)]">
-                <Lock className="w-6 h-6" />
-              </div>
-              <h3 className="font-display font-bold text-lg text-[var(--text)]">You Own Your Data</h3>
-              <p className="text-xs sm:text-sm text-[var(--muted)] leading-relaxed">
-                Export all records in standard PDF and JSON anytime. Request permanent deletion in one click.
-              </p>
-            </div>
-
-            <div className="p-8 rounded-3xl bg-[var(--bg)] border border-[var(--border)] space-y-3.5 hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 rounded-2xl bg-white border border-[var(--border)] flex items-center justify-center text-[var(--green-800)]">
-                <ShieldCheck className="w-6 h-6" />
-              </div>
-              <h3 className="font-display font-bold text-lg text-[var(--text)]">No Diagnosis or Prescribing</h3>
-              <p className="text-xs sm:text-sm text-[var(--muted)] leading-relaxed">
-                HealthMate AI explains records and supports doctor conversations. It never diagnoses or prescribes.
-              </p>
-            </div>
-
-            <div className="p-8 rounded-3xl bg-[var(--bg)] border border-[var(--border)] space-y-3.5 hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 rounded-2xl bg-white border border-[var(--border)] flex items-center justify-center text-[var(--green-800)]">
-                <CheckCircle2 className="w-6 h-6" />
-              </div>
-              <h3 className="font-display font-bold text-lg text-[var(--text)]">AI is 100% Optional</h3>
-              <p className="text-xs sm:text-sm text-[var(--muted)] leading-relaxed">
-                All document vaults, medication schedules, trend lines, and QR sharing operate normally even without AI.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 12. Languages & Accessibility */}
-      <section className="py-14 bg-emerald-50/60 border-b border-[var(--border)]">
-        <div className="max-w-[1000px] mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-6">
-          <div>
-            <h3 className="font-display font-bold text-xl text-[var(--green-900)]">
-              Regional Languages & Simple Mode for Elders
-            </h3>
-            <p className="text-xs sm:text-sm text-[var(--muted)] mt-1">
-              Switch into 20px high-contrast typography and regional languages with one tap.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setActiveLang("en")}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
-                activeLang === "en" ? "bg-[var(--green-800)] text-white shadow-sm" : "bg-white text-[var(--muted)] border border-[var(--border)] hover:text-[var(--text)]"
-              }`}
-            >
-              English
-            </button>
-            <button
-              onClick={() => setActiveLang("bn")}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
-                activeLang === "bn" ? "bg-[var(--green-800)] text-white shadow-sm" : "bg-white text-[var(--muted)] border border-[var(--border)] hover:text-[var(--text)]"
-              }`}
-            >
-              বাংলা (Bengali)
-            </button>
-            <button
-              onClick={() => setActiveLang("hi")}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
-                activeLang === "hi" ? "bg-[var(--green-800)] text-white shadow-sm" : "bg-white text-[var(--muted)] border border-[var(--border)] hover:text-[var(--text)]"
-              }`}
-            >
-              हिन्दी (Hindi)
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* 13. FAQ Accordion */}
-      <section id="faq" className="py-20 md:py-28 bg-white">
-        <div className="max-w-[800px] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-14 space-y-3">
-            <h2 className="text-3xl md:text-4xl font-display font-bold text-[var(--green-900)] tracking-tight">
-              Frequently asked questions
-            </h2>
-            <p className="text-base text-[var(--muted)]">
-              Transparent answers regarding privacy, medical boundaries, and caregiver access.
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            {faqs.map((faq, idx) => {
-              const isOpen = openFaq === idx;
-
-              return (
-                <div
-                  key={idx}
-                  className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden transition-colors"
-                >
-                  <button
-                    onClick={() => setOpenFaq(isOpen ? null : idx)}
-                    className="w-full p-5 text-left flex items-center justify-between gap-4 font-semibold text-sm sm:text-base text-[var(--text)] hover:text-[var(--green-800)]"
-                  >
-                    <span>{faq.q}</span>
-                    <ChevronDown className={`w-4 h-4 text-[var(--muted)] transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
-                  </button>
-
-                  <AnimatePresence>
-                    {isOpen && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="px-5 pb-5 text-xs sm:text-sm text-[var(--muted)] leading-relaxed border-t border-[var(--border)]/60 pt-3"
-                      >
-                        {faq.a}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* 14. Final CTA: High Contrast White Text on Green Gradient */}
-      <section className="py-20 md:py-28 bg-gradient-to-br from-green-950 via-green-900 to-emerald-950 text-white text-center relative overflow-hidden">
-        {/* Ambient radial blur glow */}
-        <div aria-hidden className="absolute -top-40 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full bg-emerald-500/20 blur-3xl pointer-events-none" />
-
-        <div className="max-w-[900px] mx-auto px-4 sm:px-6 lg:px-8 space-y-6 relative z-10">
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-display font-bold tracking-tight text-white leading-tight">
-            Start organising your family’s health today.
-          </h2>
-          <p className="text-base sm:text-lg text-emerald-100/90 max-w-xl mx-auto leading-relaxed">
-            Create your free account, upload your first report, and experience calm clarity for all medical records.
-          </p>
-          <div className="pt-3">
-            <Button
-              variant="secondary"
-              size="lg"
-              onClick={onGetStarted}
-              className="bg-white text-[var(--green-900)] hover:bg-emerald-50 px-8 py-3.5 text-base font-bold shadow-xl border-0 hover:scale-[1.02] transition-transform"
-            >
-              Create free account
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      {/* 15. Footer */}
-      <footer className="bg-white border-t border-[var(--border)] py-14 text-xs text-[var(--muted)]">
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 pb-10 border-b border-[var(--border)]">
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-[var(--green-800)] flex items-center justify-center text-white">
-                  <HeartPulse className="w-4 h-4 text-emerald-300" />
-                </div>
-                <span className="font-display font-bold text-base text-[var(--green-900)]">
-                  HealthMate AI
-                </span>
-              </div>
-              <p className="leading-relaxed text-xs">
-                Calm, trustworthy family health organizer with strict patient data isolation.
-              </p>
-            </div>
-
+      {/* ---------------------------------------------------------- footer */}
+      <footer className="bg-[#031d20] py-12 text-white/70">
+        <div className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8">
+          <div className="grid gap-8 md:grid-cols-[1.4fr_1fr_1fr]">
             <div>
-              <p className="font-semibold text-[var(--text)] uppercase tracking-wider mb-3">Product</p>
-              <ul className="space-y-2">
-                <li><a href="#features" className="hover:text-[var(--text)]">Health Records OCR</a></li>
-                <li><a href="#features" className="hover:text-[var(--text)]">Longitudinal Trends</a></li>
-                <li><a href="#features" className="hover:text-[var(--text)]">Medicine Reminders</a></li>
-                <li><a href="#features" className="hover:text-[var(--text)]">Doctor QR Share</a></li>
+              <div className="flex items-center gap-2.5">
+                <LogoMark size={34} />
+                <span className="font-display text-lg font-extrabold text-white">HealthMate AI</span>
+              </div>
+              <p className="mt-3 max-w-sm text-sm">Personal and family health records, reminders and doctor sharing in one place.</p>
+            </div>
+            <nav aria-label="Product">
+              <p className="text-xs font-bold uppercase tracking-wider text-white">Product</p>
+              <ul className="mt-3 space-y-2 text-sm">
+                {NAV.map((n) => (
+                  <li key={n.href}><a href={n.href} className="hover:text-white">{n.label}</a></li>
+                ))}
+              </ul>
+            </nav>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-white">Account</p>
+              <ul className="mt-3 space-y-2 text-sm">
+                <li><button type="button" onClick={onLogin} className="min-h-0 hover:text-white">Log in</button></li>
+                <li><button type="button" onClick={onGetStarted} className="min-h-0 hover:text-white">Create free account</button></li>
               </ul>
             </div>
-
-            <div>
-              <p className="font-semibold text-[var(--text)] uppercase tracking-wider mb-3">Privacy & Ethics</p>
-              <ul className="space-y-2">
-                <li><a href="#privacy" className="hover:text-[var(--text)]">Private by Design</a></li>
-                <li><a href="#privacy" className="hover:text-[var(--text)]">Zero Training on Records</a></li>
-                <li><a href="#privacy" className="hover:text-[var(--text)]">Immutable Audit Trail</a></li>
-                <li><a href="#privacy" className="hover:text-[var(--text)]">Export & Erasure</a></li>
-              </ul>
-            </div>
-
-            <div>
-              <p className="font-semibold text-[var(--text)] uppercase tracking-wider mb-3">Medical Disclaimer</p>
-              <p className="leading-relaxed text-[11px] text-[var(--text)]/80">
-                HealthMate AI explains records and supports doctor conversations. It never diagnoses or prescribes. All demo data is synthetic. Always consult your qualified healthcare clinician for medical diagnosis and treatment plans.
-              </p>
-            </div>
           </div>
-
-          <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px]">
-            <p>© {new Date().getFullYear()} HealthMate AI. All rights reserved.</p>
-            <p className="text-[var(--muted)]">Synthetic medical demonstration.</p>
+          <div className="mt-10 border-t border-white/10 pt-6 text-xs leading-relaxed">
+            <p>HealthMate AI explains records and supports doctor conversations. It never diagnoses or prescribes.</p>
+            <p className="mt-1 text-white/50">Screens on this page show synthetic sample data. In an emergency, contact your local emergency number.</p>
           </div>
         </div>
       </footer>
     </div>
   );
 }
+
+export default LandingPageView;

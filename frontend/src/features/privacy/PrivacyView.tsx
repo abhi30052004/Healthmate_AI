@@ -1,364 +1,253 @@
 import React, { useState } from "react";
-import {
-  ShieldCheck,
-  Lock,
-  Download,
-  Trash2,
-  Eye,
-  FileSpreadsheet,
-  AlertOctagon,
-  Clock,
-  Laptop,
-  MessageSquare,
-  Mail,
-  CheckCircle2,
-} from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Download, Trash2, ScanSearch, Eye, ShieldCheck } from "lucide-react";
 import { PageHeader } from "../../components/layout/PageHeader";
-import { Card, CardContent } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
+import { Card } from "../../components/ui/Card";
 import { Badge } from "../../components/ui/Badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/Dialog";
+import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
-import type { FamilyProfile } from "../../api/client";
+import { Skeleton } from "../../components/ui/Skeleton";
+import { EmptyState, ErrorState } from "../../components/feedback/States";
+import { useAuth } from "../../context/AuthContext";
+import {
+  deleteAccount,
+  dismissDuplicateCandidate,
+  downloadAccountExport,
+  getDataQualitySummary,
+  getDoctorShareAudit,
+  listDoctorShares,
+  listDuplicateCandidates,
+  revokeDoctorShare,
+  scanDuplicates,
+  type DoctorSharingItem,
+  type DuplicateCandidateItem,
+  type FamilyProfile,
+} from "../../api/client";
+import { errorMessage, formatDate, formatDateTime } from "../../lib/dates";
 
-interface AuditLogEntry {
-  id: string;
-  timestamp: string;
-  actor: string;
-  action: string;
-  resource: string;
-  status: "success" | "revoked" | "flagged";
-  ipAddress: string;
-}
+export function PrivacyView({ token, activeProfile }: { token: string; activeProfile: FamilyProfile | null }) {
+  const queryClient = useQueryClient();
+  const { logout } = useAuth();
+  const profileId = activeProfile?.id;
 
-const INITIAL_AUDIT_LOGS: AuditLogEntry[] = [
-  {
-    id: "log-1",
-    timestamp: "Today, 10:45 AM",
-    actor: "You (Web Client)",
-    action: "Generated Doctor Visit Pack",
-    resource: "Cardiology & Routine Labs (2026)",
-    status: "success",
-    ipAddress: "152.58.112.44",
-  },
-  {
-    id: "log-2",
-    timestamp: "Yesterday, 04:12 PM",
-    actor: "Dr. P. Sen (Cardiologist)",
-    action: "Doctor Portal QR Scan & Session Access",
-    resource: "Vitals, Labs, Active Prescriptions",
-    status: "success",
-    ipAddress: "103.21.244.18",
-  },
-  {
-    id: "log-3",
-    timestamp: "03 Nov 2026, 09:30 AM",
-    actor: "You (Web Client)",
-    action: "Verified Extracted Lab Fact",
-    resource: "HbA1c 6.8% (Sample Diagnostics Lab Report)",
-    status: "success",
-    ipAddress: "152.58.112.44",
-  },
-  {
-    id: "log-4",
-    timestamp: "28 Oct 2026, 07:15 PM",
-    actor: "Security Engine",
-    action: "Expired Doctor Consultation Share",
-    resource: "Temporary PIN Share Session #SH-9281",
-    status: "revoked",
-    ipAddress: "System Automated",
-  },
-];
+  // ---- Who can see my records (all profiles)
+  const shares = useQuery({ queryKey: ["doctor-shares", "all"], queryFn: () => listDoctorShares(token) });
+  const [auditFor, setAuditFor] = useState<DoctorSharingItem | null>(null);
+  const audit = useQuery({
+    queryKey: ["share-audit", auditFor?.id],
+    queryFn: () => getDoctorShareAudit(token, auditFor!.id),
+    enabled: !!auditFor,
+  });
+  const revoke = useMutation({
+    mutationFn: (s: DoctorSharingItem) => revokeDoctorShare(token, s.id),
+    onSuccess: () => {
+      toast.success("Link revoked.");
+      queryClient.invalidateQueries({ queryKey: ["doctor-shares"] });
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
 
-export function PrivacyView({
-  token,
-  activeProfile,
-}: {
-  token: string;
-  activeProfile?: FamilyProfile;
-}) {
-  const [logs] = useState<AuditLogEntry[]>(INITIAL_AUDIT_LOGS);
-  const [isExporting, setIsExporting] = useState(false);
-  const [exportComplete, setExportComplete] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [confirmPhrase, setConfirmPhrase] = useState("");
+  // ---- Data quality
+  const summary = useQuery({
+    queryKey: ["dq-summary", profileId],
+    queryFn: () => getDataQualitySummary(token, profileId),
+    enabled: !!profileId,
+  });
+  const candidates = useQuery({
+    queryKey: ["dq-candidates", profileId],
+    queryFn: () => listDuplicateCandidates(token, { profileId, status: "pending", pageSize: 10 }),
+    enabled: !!profileId,
+  });
+  const refreshDq = () => {
+    queryClient.invalidateQueries({ queryKey: ["dq-summary", profileId] });
+    queryClient.invalidateQueries({ queryKey: ["dq-candidates", profileId] });
+  };
+  const scan = useMutation({
+    mutationFn: () => scanDuplicates(token, profileId),
+    onSuccess: (s) => {
+      toast.success(s.pending_candidates ? `${s.pending_candidates} possible duplicate(s) to review.` : "No duplicates found.");
+      refreshDq();
+    },
+    onError: (e) => toast.error(errorMessage(e, "Scan failed.")),
+  });
+  const dismiss = useMutation({
+    mutationFn: (c: DuplicateCandidateItem) => dismissDuplicateCandidate(token, c.id, "Reviewed: not a duplicate"),
+    onSuccess: refreshDq,
+    onError: (e) => toast.error(errorMessage(e)),
+  });
 
-  const handleExportData = () => {
-    setIsExporting(true);
-    setExportComplete(false);
-    setTimeout(() => {
-      setIsExporting(false);
-      setExportComplete(true);
-    }, 1200);
+  // ---- Export / delete
+  const [exporting, setExporting] = useState(false);
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await downloadAccountExport(token);
+      toast.success("Your data export has been downloaded.");
+    } catch (e) {
+      toast.error(errorMessage(e, "Export failed."));
+    } finally {
+      setExporting(false);
+    }
   };
 
-  const handleDeleteAccount = () => {
-    alert("Account deletion request logged. In accordance with data privacy regulations, your profile and records will be permanently purged.");
-    setIsDeleteModalOpen(false);
-  };
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [password, setPassword] = useState("");
+  const [phrase, setPhrase] = useState("");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const del = useMutation({
+    mutationFn: () => deleteAccount(token, password),
+    onSuccess: () => {
+      logout();
+      queryClient.clear();
+      // Hard redirect: guarantees no health data lingers in memory and avoids the route
+      // guard racing the router (it would bounce an in-app navigation to /login).
+      window.location.replace("/");
+    },
+    onError: (e) => setDeleteError(errorMessage(e, "Couldn't delete the account.")),
+  });
+
+  const activeShares = (shares.data ?? []).filter((s) => s.status === "active" && !s.is_expired);
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-12">
-      <PageHeader
-        title="Privacy & Security Centre"
-        subtitle="Full transparency over who accessed your records, audit history, and complete data ownership controls."
-      />
+    <div className="space-y-8" data-testid="privacy-view">
+      <PageHeader title="Privacy & Data" subtitle="See who can view your records, check for duplicate entries, and download or delete your data." />
 
-      {/* Trust & Sovereignty Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <Card className="border-[var(--green-600)]/30 bg-white">
-          <CardContent className="p-5 space-y-2">
-            <div className="w-9 h-9 rounded-xl bg-[var(--green-50)] text-[var(--green-800)] flex items-center justify-center">
-              <ShieldCheck className="w-5 h-5" />
-            </div>
-            <h3 className="font-semibold text-sm text-[var(--text)]">You Own 100% of Your Data</h3>
-            <p className="text-xs text-[var(--muted)] leading-relaxed">
-              HealthMate never sells, monetizes, or uses your medical records for public AI model training.
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-[var(--green-600)]/30 bg-white">
-          <CardContent className="p-5 space-y-2">
-            <div className="w-9 h-9 rounded-xl bg-[var(--green-50)] text-[var(--green-800)] flex items-center justify-center">
-              <Lock className="w-5 h-5" />
-            </div>
-            <h3 className="font-semibold text-sm text-[var(--text)]">Zero-Retention Sharing</h3>
-            <p className="text-xs text-[var(--muted)] leading-relaxed">
-              Clinician QR shares are strictly time-limited and PIN-protected. You can revoke access in one click anytime.
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-[var(--green-600)]/30 bg-white">
-          <CardContent className="p-5 space-y-2">
-            <div className="w-9 h-9 rounded-xl bg-[var(--green-50)] text-[var(--green-800)] flex items-center justify-center">
-              <Clock className="w-5 h-5" />
-            </div>
-            <h3 className="font-semibold text-sm text-[var(--text)]">Immutable Audit Trail</h3>
-            <p className="text-xs text-[var(--muted)] leading-relaxed">
-              Every document view, fact verification, export, and clinician portal scan is permanently logged.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Linked Channels & Devices */}
-      <div className="p-5 rounded-2xl bg-white border border-[var(--border)] shadow-sm space-y-4">
-        <h3 className="font-display font-semibold text-base text-[var(--text)]">
-          Connected Access Channels
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="p-3.5 rounded-xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Laptop className="w-4 h-4 text-[var(--green-700)]" />
-              <div>
-                <p className="text-xs font-semibold text-[var(--text)]">Current Web Session</p>
-                <p className="text-[11px] text-[var(--muted)]">Active now (Chrome, Windows)</p>
+      <section className="space-y-3" aria-label="Active share links">
+        <h2 className="font-display font-semibold text-base flex items-center gap-2">
+          <Eye size={17} aria-hidden="true" /> Who can see your records right now
+        </h2>
+        {shares.isLoading ? (
+          <Skeleton height={80} rounded="lg" />
+        ) : shares.isError ? (
+          <ErrorState title="Couldn't load share links" message={errorMessage(shares.error)} onRetry={() => shares.refetch()} />
+        ) : activeShares.length === 0 ? (
+          <Card className="p-4 text-sm flex items-center gap-2">
+            <ShieldCheck size={16} className="text-[var(--green-600)]" aria-hidden="true" /> No active doctor links. Only you can see your records.
+          </Card>
+        ) : (
+          <Card className="divide-y divide-[var(--border)]">
+            {activeShares.map((s) => (
+              <div key={s.id} className="p-4 flex flex-wrap items-center justify-between gap-3 text-sm">
+                <div>
+                  <p className="font-semibold">{s.doctor_name} <span className="font-normal text-[var(--muted)]">for {s.profile_name}</span></p>
+                  <p className="text-xs text-[var(--muted)]">Expires {formatDateTime(s.expires_at)} · opened {s.access_count} time{s.access_count === 1 ? "" : "s"}</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setAuditFor(s)}>Access log</Button>
+                  <Button variant="danger" size="sm" loading={revoke.isPending && revoke.variables?.id === s.id} onClick={() => revoke.mutate(s)}>Revoke</Button>
+                </div>
               </div>
-            </div>
-            <Badge variant="verified" size="sm">Active</Badge>
-          </div>
+            ))}
+          </Card>
+        )}
+      </section>
 
-          <div className="p-3.5 rounded-xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <MessageSquare className="w-4 h-4 text-[var(--green-700)]" />
-              <div>
-                <p className="text-xs font-semibold text-[var(--text)]">Telegram Reminders</p>
-                <p className="text-[11px] text-[var(--muted)]">Bot @HealthMateCareBot</p>
-              </div>
-            </div>
-            <Badge variant="verified" size="sm">Connected</Badge>
-          </div>
-
-          <div className="p-3.5 rounded-xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Mail className="w-4 h-4 text-[var(--green-700)]" />
-              <div>
-                <p className="text-xs font-semibold text-[var(--text)]">Email Alerts</p>
-                <p className="text-[11px] text-[var(--muted)]">Security & reports</p>
-              </div>
-            </div>
-            <Badge variant="verified" size="sm">Active</Badge>
-          </div>
+      <section className="space-y-3" aria-label="Duplicate check">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-display font-semibold text-base flex items-center gap-2">
+            <ScanSearch size={17} aria-hidden="true" /> Duplicate check for {activeProfile?.name}
+          </h2>
+          <Button variant="outline" size="sm" loading={scan.isPending} onClick={() => scan.mutate()}>
+            Scan now
+          </Button>
         </div>
-      </div>
+        {summary.data && (
+          <p className="text-xs text-[var(--muted)]">
+            {summary.data.pending_candidates} to review · {summary.data.dismissed_candidates} dismissed · {summary.data.resolved_duplicates} resolved
+            {summary.data.last_scan_at ? ` · last scan ${formatDateTime(summary.data.last_scan_at)}` : " · never scanned"}
+          </p>
+        )}
+        {candidates.isLoading ? (
+          <Skeleton height={60} rounded="lg" />
+        ) : (candidates.data?.items ?? []).length === 0 ? (
+          <EmptyState title="Nothing to review" description="Run a scan to look for repeated uploads or repeated results. Nothing is ever merged or deleted automatically." />
+        ) : (
+          <Card className="divide-y divide-[var(--border)]">
+            {(candidates.data?.items ?? []).map((c) => (
+              <div key={c.id} className="p-4 text-xs space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-semibold">
+                    {c.primary_summary?.title ?? "Record"} <span className="text-[var(--muted)]">and</span> {c.secondary_summary?.title ?? "Record"}
+                  </p>
+                  <Badge variant="review" size="sm">{Math.round(c.confidence * 100)}% similar</Badge>
+                </div>
+                <ul className="text-[var(--muted)] list-disc pl-4">
+                  {c.match_reasons.map((r) => (
+                    <li key={r.code}>{r.description}</li>
+                  ))}
+                </ul>
+                <div className="flex justify-end">
+                  <Button variant="outline" size="sm" loading={dismiss.isPending && dismiss.variables?.id === c.id} onClick={() => dismiss.mutate(c)}>
+                    Not a duplicate
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </Card>
+        )}
+        <p className="text-[11px] text-[var(--muted)]">Possible duplicates are only suggestions. You decide what to keep.</p>
+      </section>
 
-      {/* Access Audit Log Table */}
-      <div className="p-5 rounded-2xl bg-white border border-[var(--border)] shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
+      <section className="space-y-3" aria-label="Your data">
+        <h2 className="font-display font-semibold text-base">Your data</h2>
+        <Card className="p-5 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h3 className="font-display font-semibold text-base text-[var(--text)]">
-              Security & Access Log
-            </h3>
-            <p className="text-xs text-[var(--muted)]">
-              Real-time audit history of data reads, exports, and clinician sharing sessions.
-            </p>
+            <p className="font-semibold text-sm">Download everything</p>
+            <p className="text-xs text-[var(--muted)]">A JSON file with your profiles, results, medications, appointments, symptoms and share history. Original files aren't included.</p>
           </div>
-          <Badge variant="neutral" size="sm">
-            {logs.length} Events Logged
-          </Badge>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="border-b border-[var(--border)] text-[var(--muted)] uppercase font-semibold">
-                <th className="py-2.5 px-3">Timestamp</th>
-                <th className="py-2.5 px-3">Actor</th>
-                <th className="py-2.5 px-3">Action</th>
-                <th className="py-2.5 px-3">Resource / Scope</th>
-                <th className="py-2.5 px-3">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border)]">
-              {logs.map((entry) => (
-                <tr key={entry.id} className="hover:bg-[var(--bg)]/50 transition-colors">
-                  <td className="py-3 px-3 font-medium text-[var(--text)] whitespace-nowrap">
-                    {entry.timestamp}
-                  </td>
-                  <td className="py-3 px-3 text-[var(--text)] font-semibold">
-                    {entry.actor}
-                  </td>
-                  <td className="py-3 px-3 text-[var(--text)]">
-                    {entry.action}
-                  </td>
-                  <td className="py-3 px-3 text-[var(--muted)]">
-                    {entry.resource}
-                  </td>
-                  <td className="py-3 px-3 whitespace-nowrap">
-                    {entry.status === "success" && (
-                      <Badge variant="verified" size="sm">Success</Badge>
-                    )}
-                    {entry.status === "revoked" && (
-                      <Badge variant="neutral" size="sm">Expired / Revoked</Badge>
-                    )}
-                    {entry.status === "flagged" && (
-                      <Badge variant="failed" size="sm">Flagged</Badge>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Data Export & Account Erasure Controls */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {/* Export Data */}
-        <Card className="border-[var(--border)] bg-white shadow-sm">
-          <CardContent className="p-5 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-lg bg-[var(--green-50)] text-[var(--green-800)]">
-                <Download className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="font-display font-semibold text-sm text-[var(--text)]">
-                  Export Complete Health Archive
-                </h4>
-                <p className="text-xs text-[var(--muted)]">
-                  Download all uploaded documents, verified lab tests, medication histories, and timeline data in a portable JSON + PDF archive.
-                </p>
-              </div>
-            </div>
-
-            {exportComplete && (
-              <div className="p-3 rounded-lg bg-[var(--green-50)] border border-[var(--green-100)] text-xs text-[var(--green-900)] flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-[var(--green-600)]" />
-                <span>Health records export package generated successfully.</span>
-              </div>
-            )}
-
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleExportData}
-              disabled={isExporting}
-              className="gap-2 w-full justify-center"
-            >
-              <Download className="w-4 h-4" />
-              <span>{isExporting ? "Compiling Archive..." : "Export All Records (JSON & PDF)"}</span>
-            </Button>
-          </CardContent>
+          <Button variant="outline" iconLeft={<Download size={15} />} loading={exporting} onClick={handleExport}>
+            Export my data
+          </Button>
         </Card>
-
-        {/* Delete Account */}
-        <Card className="border-[var(--danger)]/30 bg-[var(--danger-bg)]/30 shadow-sm">
-          <CardContent className="p-5 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-lg bg-[var(--danger-bg)] text-[var(--danger)]">
-                <Trash2 className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="font-display font-semibold text-sm text-[var(--text)]">
-                  Permanent Account & Record Deletion
-                </h4>
-                <p className="text-xs text-[var(--muted)]">
-                  Request immediate erasure of all your health records, uploaded scans, profile identities, and audit trails.
-                </p>
-              </div>
-            </div>
-
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={() => setIsDeleteModalOpen(true)}
-              className="gap-2 w-full justify-center"
-            >
-              <AlertOctagon className="w-4 h-4" />
-              <span>Delete Account & Purge Records</span>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Delete Confirmation Modal */}
-      <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-[var(--danger)] flex items-center gap-2">
-              <AlertOctagon className="w-5 h-5" />
-              <span>Confirm Permanent Account Deletion</span>
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 pt-2">
-            <p className="text-sm text-[var(--text)] leading-relaxed">
-              This action is permanent and irreversible. All your medical documents, lab trend histories, doctor visit packs, and family profiles will be permanently erased.
-            </p>
-
-            <div className="p-3 rounded-lg bg-[var(--danger-bg)] border border-[var(--danger)]/20 text-xs text-[var(--danger)]">
-              Please type <strong>DELETE MY HEALTHMATE DATA</strong> to authorize data destruction.
-            </div>
-
-            <Input
-              value={confirmPhrase}
-              onChange={(e) => setConfirmPhrase(e.target.value)}
-              placeholder="DELETE MY HEALTHMATE DATA"
-              className="font-mono text-sm"
-            />
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setIsDeleteModalOpen(false);
-                  setConfirmPhrase("");
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="danger"
-                disabled={confirmPhrase !== "DELETE MY HEALTHMATE DATA"}
-                onClick={handleDeleteAccount}
-              >
-                Permanently Delete Everything
-              </Button>
-            </div>
+        <Card className="p-5 flex flex-wrap items-center justify-between gap-4 border-[var(--danger)]/40">
+          <div>
+            <p className="font-semibold text-sm text-[var(--danger)]">Delete my account</p>
+            <p className="text-xs text-[var(--muted)]">Permanently removes your account, every profile, all records and uploaded files. This can't be undone.</p>
           </div>
-        </DialogContent>
+          <Button variant="danger" iconLeft={<Trash2 size={15} />} onClick={() => { setDeleteError(null); setPassword(""); setPhrase(""); setDeleteOpen(true); }}>
+            Delete account
+          </Button>
+        </Card>
+      </section>
+
+      <Dialog open={!!auditFor} onClose={() => setAuditFor(null)} maxWidth="lg" title={`Access log: ${auditFor?.doctor_name ?? ""}`}>
+        {audit.isLoading ? (
+          <Skeleton height={60} rounded="lg" />
+        ) : (audit.data ?? []).length === 0 ? (
+          <p className="text-xs text-[var(--muted)]">Not opened yet.</p>
+        ) : (
+          <ul className="text-xs divide-y divide-[var(--border)]">
+            {(audit.data ?? []).map((a) => (
+              <li key={a.id} className="py-2 flex justify-between gap-3">
+                <span className="font-medium">{a.event_type.replace(/_/g, " ")}</span>
+                <span className="text-[var(--muted)]">{formatDateTime(a.created_at)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Dialog>
+
+      <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)} maxWidth="md" title="Delete your account?" description="Everything will be permanently deleted. Consider exporting your data first.">
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (phrase !== "DELETE") return setDeleteError('Type DELETE to confirm.');
+            if (!password) return setDeleteError("Enter your password.");
+            setDeleteError(null);
+            del.mutate();
+          }}
+        >
+          <Input label="Type DELETE to confirm" value={phrase} onChange={(e) => setPhrase(e.target.value)} autoComplete="off" />
+          <Input label="Your password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+          {deleteError && <p role="alert" className="text-xs text-[var(--danger)]">{deleteError}</p>}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setDeleteOpen(false)}>Cancel</Button>
+            <Button type="submit" variant="danger" loading={del.isPending}>Delete everything</Button>
+          </div>
+        </form>
       </Dialog>
     </div>
   );

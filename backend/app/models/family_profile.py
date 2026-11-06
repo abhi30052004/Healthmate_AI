@@ -66,6 +66,18 @@ class FamilyProfile(Base):
         nullable=True,
     )
 
+    conditions_summary: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,  # User-entered, e.g. "Type 2 diabetes". Shown on the emergency card.
+    )
+
+    emergency_token: Mapped[str | None] = mapped_column(
+        String(64),
+        unique=True,
+        index=True,
+        nullable=True,  # Set = public emergency card is on (QR link). NULL = off. Rotating revokes old QR codes.
+    )
+
     avatar_color: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,  # Hex or CSS color identifier for profile avatar

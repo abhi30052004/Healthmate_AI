@@ -1,317 +1,307 @@
-import React, { useState } from "react";
-import {
-  Upload,
-  Plus,
-  TrendingUp,
-  Activity,
-  FileText,
-  AlertTriangle,
-  ArrowRight,
-  ShieldCheck,
-  CheckCircle2,
-} from "lucide-react";
+import React, { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Upload, Plus, TrendingUp, ArrowRight, ShieldCheck, CheckCircle2, Circle } from "lucide-react";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { Button } from "../../components/ui/Button";
-import { Card, CardHeader, CardContent } from "../../components/ui/Card";
+import { Card } from "../../components/ui/Card";
+import { Skeleton } from "../../components/ui/Skeleton";
 import { StatCard } from "../../components/health/StatCard";
-import { DoseCard, type DoseItem } from "../../components/health/DoseCard";
+import { DoseCard } from "../../components/health/DoseCard";
 import { AppointmentCard, ReviewQueueCard, ChangeCard } from "../../components/health/HealthCards";
-import type { FamilyProfile, User, DocumentItem } from "../../api/client";
+import { EmptyState } from "../../components/feedback/States";
+import { profileQueryKeys } from "../../app/queryClient";
+import {
+  getCareOverview,
+  getTimelineTrends,
+  listDocuments,
+  type FamilyProfile,
+  type TrendSeries,
+  type User,
+} from "../../api/client";
+import { formatDate, formatTime, errorMessage } from "../../lib/dates";
+import { useDoses } from "../medicines/useDoses";
+import { documentUiState } from "../records/HealthRecordsView";
 
 export interface DashboardViewProps {
+  token: string;
   user: User | null;
   activeProfile: FamilyProfile | null;
-  documents?: DocumentItem[];
   onNavigateTab: (tab: any) => void;
 }
 
-export function DashboardView({
-  user,
-  activeProfile,
-  documents = [],
-  onNavigateTab,
-}: DashboardViewProps) {
-  const patientName = activeProfile?.name || user?.name || "Patient";
+function sortedPoints(series: TrendSeries) {
+  return [...series.points].sort((a, b) => a.date.localeCompare(b.date));
+}
 
-  // Synthetic today's doses (sample for active profile)
-  const [doses, setDoses] = useState<DoseItem[]>([
-    {
-      id: "dose-1",
-      name: "Metformin Hydrochloride",
-      dosage: "500 mg",
-      time: "8:00 AM",
-      instructions: "Take with food",
-      status: "pending",
-    },
-    {
-      id: "dose-2",
-      name: "Atorvastatin Calcium",
-      dosage: "20 mg",
-      time: "9:00 PM",
-      instructions: "Take before sleep",
-      status: "pending",
-    },
-  ]);
+function latestDate(series: TrendSeries): string {
+  const pts = sortedPoints(series);
+  return pts[pts.length - 1].date;
+}
 
-  const handleTakeDose = (id: string) => {
-    setDoses((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, status: "taken" } : d))
-    );
-  };
+function describeChange(series: TrendSeries) {
+  const pts = sortedPoints(series);
+  if (pts.length < 2) return null;
+  const prev = pts[pts.length - 2];
+  const cur = pts[pts.length - 1];
+  const diff = cur.standardized_numeric_value - prev.standardized_numeric_value;
+  const unit = series.standard_unit || cur.original_unit || "";
+  const rounded = Math.round(diff * 100) / 100;
+  return { prev, cur, diff: rounded, unit };
+}
 
-  const handleSkipDose = (id: string) => {
-    setDoses((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, status: "skipped" } : d))
-    );
-  };
+export function DashboardView({ token, user, activeProfile, onNavigateTab }: DashboardViewProps) {
+  const profileId = activeProfile?.id ?? "";
+  const patientName = activeProfile?.name || user?.name || "there";
 
-  const handleSnoozeDose = (id: string) => {
-    setDoses((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, status: "snoozed" } : d))
-    );
-  };
+  const doses = useDoses(token, profileId);
 
-  // Check if profile has unverified documents
-  const unverifiedDocs = documents.filter(
-    (d) => d.processing_status === "extracted" || d.processing_status === "ocr_required"
+  const overview = useQuery({
+    queryKey: ["care-overview", profileId],
+    queryFn: () => getCareOverview(token, profileId),
+    enabled: !!profileId,
+  });
+  const trends = useQuery({
+    queryKey: profileQueryKeys.trends(profileId),
+    queryFn: () => getTimelineTrends(token, { profile_id: profileId }),
+    enabled: !!profileId,
+  });
+  const docs = useQuery({
+    queryKey: profileQueryKeys.documents(profileId),
+    queryFn: () => listDocuments(token, profileId),
+    enabled: !!profileId,
+  });
+
+  const needsReview = (docs.data ?? []).filter((d) => documentUiState(d) === "needs_review");
+  const nextAppt = overview.data?.upcoming_appointments?.[0] ?? null;
+  const apptTasks = overview.data?.pending_tasks?.filter((t) => nextAppt && t.appointment_id === nextAppt.id) ?? [];
+
+  const latestSeries = useMemo(() => {
+    const series = trends.data?.series ?? [];
+    return [...series]
+      .filter((s) => s.points.length > 0)
+      .sort((a, b) => latestDate(b).localeCompare(latestDate(a)))
+      .slice(0, 4);
+  }, [trends.data]);
+
+  const changes = useMemo(
+    () =>
+      (trends.data?.series ?? [])
+        .map((s) => ({ s, c: describeChange(s) }))
+        .filter((x): x is { s: TrendSeries; c: NonNullable<ReturnType<typeof describeChange>> } => x.c !== null)
+        .sort((a, b) => b.c.cur.date.localeCompare(a.c.cur.date))
+        .slice(0, 3),
+    [trends.data]
   );
+
+  const readiness = [
+    { label: "At least one verified result", done: (trends.data?.series ?? []).length > 0 },
+    { label: "Medication list added", done: (overview.data?.active_medications_count ?? 0) > 0 },
+    { label: "Allergies recorded", done: !!activeProfile?.allergies_summary?.trim() },
+    { label: "Emergency contact added", done: !!activeProfile?.emergency_contact_name?.trim() },
+  ];
+  const readyCount = readiness.filter((r) => r.done).length;
 
   return (
     <div className="space-y-8" data-testid="dashboard-view">
-      {/* Header with Greeting & Action Buttons */}
       <PageHeader
-        title={`Good day, ${patientName}`}
-        subtitle={`Managing verified health records for ${activeProfile?.is_primary ? "your primary account" : `${activeProfile?.name} (${activeProfile?.relationship})`}.`}
+        title={`Hello, ${patientName}`}
+        subtitle={`Viewing records for ${activeProfile?.is_primary ? "your own profile" : `${activeProfile?.name} (${activeProfile?.relationship})`}.`}
         actions={
           <div className="flex items-center gap-2.5">
-            <Button
-              variant="primary"
-              size="sm"
-              iconLeft={<Upload size={14} />}
-              onClick={() => onNavigateTab("records")}
-            >
-              Upload Report
+            <Button variant="primary" size="sm" iconLeft={<Upload size={14} />} onClick={() => onNavigateTab("records")}>
+              Add records
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              iconLeft={<Plus size={14} />}
-              onClick={() => onNavigateTab("medicines")}
-            >
-              Log Vital / Dose
+            <Button variant="outline" size="sm" iconLeft={<Plus size={14} />} onClick={() => onNavigateTab("medicines")}>
+              Today's doses
             </Button>
           </div>
         }
       />
 
-      {/* Row 1: Today's Action Center (Medicines, Next Appointment, Alerts) */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {/* Today's Prescriptions */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-display font-semibold text-[var(--text)]">
-              Today's Prescriptions
-            </h2>
-            <button
-              type="button"
-              onClick={() => onNavigateTab("medicines")}
-              className="text-xs font-semibold text-[var(--green-700)] hover:underline"
-            >
-              View Schedule
+          <div className="flex items-center justify-between min-h-[24px]">
+            <h2 className="text-sm font-display font-semibold">Today's doses</h2>
+            <button type="button" onClick={() => onNavigateTab("medicines")} className="text-xs font-semibold text-[var(--green-700)] hover:underline">
+              View schedule
             </button>
           </div>
-
-          <div className="space-y-3">
-            {doses.map((dose) => (
-              <DoseCard
-                key={dose.id}
-                dose={dose}
-                onTake={handleTakeDose}
-                onSkip={handleSkipDose}
-                onSnooze={handleSnoozeDnooze => handleSnoozeDose(dose.id)}
-              />
-            ))}
-          </div>
+          {doses.isLoading ? (
+            <Skeleton height={110} rounded="lg" />
+          ) : doses.items.length === 0 ? (
+            <Card className="p-4 text-xs text-[var(--muted)]">No doses scheduled today.</Card>
+          ) : (
+            <div className="space-y-3">
+              {doses.items.slice(0, 3).map((d) => (
+                <DoseCard key={d.id} dose={d} busy={doses.busyId === d.id} onTake={doses.take} onSkip={doses.skip} onSnooze={doses.snooze} onUndo={doses.undo} />
+              ))}
+              {doses.items.length > 3 && (
+                <button type="button" onClick={() => onNavigateTab("medicines")} className="text-xs font-semibold text-[var(--green-700)]">
+                  + {doses.items.length - 3} more today
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Next Appointment */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-display font-semibold text-[var(--text)]">
-              Next Clinical Visit
-            </h2>
-            <button
-              type="button"
-              onClick={() => onNavigateTab("appointments")}
-              className="text-xs font-semibold text-[var(--green-700)] hover:underline"
-            >
-              All Visits
+          <div className="flex items-center justify-between min-h-[24px]">
+            <h2 className="text-sm font-display font-semibold">Next visit</h2>
+            <button type="button" onClick={() => onNavigateTab("appointments")} className="text-xs font-semibold text-[var(--green-700)] hover:underline">
+              All visits
             </button>
           </div>
-
-          <AppointmentCard
-            doctor="Dr. Sourav Mukherjee"
-            specialty="Consultant Cardiologist · Apex Heart Center"
-            date="Friday, 14 Nov 2026"
-            time="11:30 AM"
-            checklistCompleted={2}
-            checklistTotal={3}
-            onPrepareClick={() => onNavigateTab("visit-pack")}
-          />
+          {overview.isLoading ? (
+            <Skeleton height={140} rounded="lg" />
+          ) : nextAppt ? (
+            <AppointmentCard
+              doctor={nextAppt.title}
+              specialty={[nextAppt.provider_name, nextAppt.appointment_type].filter(Boolean).join(" · ") || "Appointment"}
+              date={formatDate(nextAppt.scheduled_at)}
+              time={formatTime(nextAppt.scheduled_at)}
+              checklistCompleted={Math.max(nextAppt.follow_up_tasks_count - apptTasks.length, 0)}
+              checklistTotal={nextAppt.follow_up_tasks_count}
+              onPrepareClick={() => onNavigateTab("visit-pack")}
+            />
+          ) : (
+            <Card className="p-4 text-xs text-[var(--muted)] space-y-2">
+              <p>No upcoming appointments.</p>
+              <button type="button" onClick={() => onNavigateTab("appointments")} className="font-semibold text-[var(--green-700)]">
+                Add one
+              </button>
+            </Card>
+          )}
         </div>
 
-        {/* Review Queue / Alerts */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-display font-semibold text-[var(--text)]">
-              Clinical Review Queue
-            </h2>
-            <span className="text-xs text-[var(--muted)]">Human Verification</span>
+          <div className="flex items-center justify-between min-h-[24px]">
+            <h2 className="text-sm font-display font-semibold">Needs your review</h2>
+            <span className="text-xs text-[var(--muted)]">Human verification</span>
           </div>
-
-          <ReviewQueueCard
-            count={unverifiedDocs.length > 0 ? unverifiedDocs.length : 1}
-            documentTitle={
-              unverifiedDocs[0]?.filename || "Comprehensive Metabolic & Lipid Panel.pdf"
-            }
-            extractedDate="Report dated 28 Oct 2026"
-            onReviewClick={() => onNavigateTab("records")}
-          />
+          {docs.isLoading ? (
+            <Skeleton height={140} rounded="lg" />
+          ) : needsReview.length > 0 ? (
+            <ReviewQueueCard
+              count={needsReview.length}
+              documentTitle={needsReview[0].filename}
+              extractedDate={needsReview[0].document_date ? `Report dated ${formatDate(needsReview[0].document_date)}` : undefined}
+              onReviewClick={() => onNavigateTab("records")}
+            />
+          ) : (
+            <Card className="p-4 text-xs text-[var(--muted)] flex items-center gap-2">
+              <CheckCircle2 size={16} className="text-[var(--green-600)]" aria-hidden="true" />
+              Nothing waiting for review.
+            </Card>
+          )}
         </div>
       </section>
 
-      {/* Row 2: Latest Verified Clinical Measurements (StatCards) */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-display font-bold text-[var(--green-900)]">
-            Latest Verified Vitals & Lab Measurements
-          </h2>
-          <span className="text-xs text-[var(--muted)]">Derived from human-verified records</span>
+          <h2 className="text-base font-display font-bold text-[var(--green-900)]">Latest verified results</h2>
+          <span className="text-xs text-[var(--muted)]">Only values you've confirmed</span>
         </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            label="Blood Pressure"
-            value="120/80"
-            unit="mmHg"
-            date="28 Oct 2026"
-            delta={{ value: "+4 mmHg", isIncrease: true, period: "15 Aug 2026" }}
-            isVerified={true}
-            onClick={() => onNavigateTab("timeline")}
+        {trends.isLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[0, 1, 2, 3].map((i) => (
+              <Skeleton key={i} height={120} rounded="lg" />
+            ))}
+          </div>
+        ) : trends.isError ? (
+          <p role="alert" className="text-xs text-[var(--danger)]">{errorMessage(trends.error, "Couldn't load results.")}</p>
+        ) : latestSeries.length === 0 ? (
+          <EmptyState
+            title="No verified results yet"
+            description="Upload a report and confirm its values, or enter results by hand, to see them here."
+            actionLabel="Add records"
+            onAction={() => onNavigateTab("records")}
           />
-          <StatCard
-            label="Fasting Blood Glucose"
-            value="94"
-            unit="mg/dL"
-            date="28 Oct 2026"
-            delta={{ value: "-6 mg/dL", isIncrease: false, period: "15 Aug 2026" }}
-            isVerified={true}
-            onClick={() => onNavigateTab("timeline")}
-          />
-          <StatCard
-            label="HbA1c Glycated Hemoglobin"
-            value="5.6"
-            unit="%"
-            date="28 Oct 2026"
-            delta={{ value: "0.0%", neutral: true, period: "15 Aug 2026" }}
-            isVerified={true}
-            onClick={() => onNavigateTab("timeline")}
-          />
-          <StatCard
-            label="Total Serum Cholesterol"
-            value="182"
-            unit="mg/dL"
-            date="28 Oct 2026"
-            delta={{ value: "-12 mg/dL", isIncrease: false, period: "15 Aug 2026" }}
-            isVerified={true}
-            onClick={() => onNavigateTab("timeline")}
-          />
-        </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {latestSeries.map((s) => {
+              const pts = sortedPoints(s);
+              const cur = pts[pts.length - 1];
+              const ch = describeChange(s);
+              return (
+                <StatCard
+                  key={s.normalized_test_name}
+                  label={s.normalized_test_name}
+                  value={cur.value}
+                  unit={cur.original_unit ?? s.standard_unit}
+                  date={formatDate(cur.date)}
+                  delta={
+                    ch
+                      ? ch.diff === 0
+                        ? { value: "No change", neutral: true, period: formatDate(ch.prev.date) }
+                        : { value: `${ch.diff > 0 ? "+" : ""}${ch.diff} ${ch.unit}`, isIncrease: ch.diff > 0, period: formatDate(ch.prev.date) }
+                      : undefined
+                  }
+                  isVerified
+                  onClick={() => onNavigateTab("timeline")}
+                />
+              );
+            })}
+          </div>
+        )}
       </section>
 
-      {/* Row 3: Rule-Based Shift Detection & Record Completeness */}
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* What Changed (Rule-Based Detection) */}
         <Card className="p-5 space-y-3">
           <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
             <div className="flex items-center gap-2">
-              <TrendingUp size={16} className="text-[var(--green-700)]" />
-              <h3 className="text-sm font-display font-semibold text-[var(--text)]">
-                Longitudinal Changes (Rule-Based Detection)
-              </h3>
+              <TrendingUp size={16} className="text-[var(--green-700)]" aria-hidden="true" />
+              <h3 className="text-sm font-display font-semibold">What changed</h3>
             </div>
-            <span className="text-[11px] text-[var(--muted)]">Verified Reports</span>
+            <span className="text-[11px] text-[var(--muted)]">Latest vs previous result</span>
           </div>
-
-          <div className="space-y-3 pt-1">
-            <ChangeCard
-              observation="Systolic Blood Pressure"
-              previousValue="116"
-              currentValue="120"
-              unit="mmHg"
-              period="Aug vs Oct 2026"
-              neutralDescription="Observed within standard reference range on both comparative reports."
-            />
-            <ChangeCard
-              observation="Serum Creatinine"
-              previousValue="0.9"
-              currentValue="0.88"
-              unit="mg/dL"
-              period="Aug vs Oct 2026"
-              neutralDescription="Stable longitudinal value across two consecutive automated chemistry panels."
-            />
-          </div>
+          {changes.length === 0 ? (
+            <p className="text-xs text-[var(--muted)]">Add the same test on two dates to see how the recorded value moved.</p>
+          ) : (
+            <div className="space-y-3 pt-1">
+              {changes.map(({ s, c }) => (
+                <ChangeCard
+                  key={s.normalized_test_name}
+                  observation={s.normalized_test_name}
+                  previousValue={c.prev.value}
+                  currentValue={c.cur.value}
+                  unit={c.cur.original_unit ?? s.standard_unit}
+                  period={`${formatDate(c.prev.date)} → ${formatDate(c.cur.date)}`}
+                  neutralDescription="This shows what was recorded, not what it means. Discuss changes with your doctor."
+                />
+              ))}
+            </div>
+          )}
         </Card>
 
-        {/* Record Completeness & Clinician Share Readiness */}
         <Card className="p-5 flex flex-col justify-between">
           <div className="space-y-2">
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
               <div className="flex items-center gap-2">
-                <ShieldCheck size={16} className="text-[var(--green-700)]" />
-                <h3 className="text-sm font-display font-semibold text-[var(--text)]">
-                  Doctor Visit Pack Readiness
-                </h3>
+                <ShieldCheck size={16} className="text-[var(--green-700)]" aria-hidden="true" />
+                <h3 className="text-sm font-display font-semibold">Visit pack readiness</h3>
               </div>
-              <span className="text-xs font-semibold text-[var(--green-600)]">85% Complete</span>
+              <span className="text-xs font-semibold text-[var(--green-600)]" data-testid="readiness-count">
+                {readyCount} of {readiness.length}
+              </span>
             </div>
-
             <p className="text-xs text-[var(--muted)] pt-2 leading-relaxed">
-              Your recent lab findings, active prescriptions, and observation history are organized. You can generate a time-limited read-only QR code or export a consolidated PDF report for your upcoming consultation.
+              A fuller record makes a more useful summary for your doctor. This is a checklist of what's recorded, not a health score.
             </p>
-
-            <div className="pt-2 space-y-1.5 text-xs">
-              <div className="flex items-center gap-2 text-[var(--text)]">
-                <CheckCircle2 size={14} className="text-[var(--green-600)] shrink-0" />
-                <span>Recent blood panels verified (28 Oct 2026)</span>
-              </div>
-              <div className="flex items-center gap-2 text-[var(--text)]">
-                <CheckCircle2 size={14} className="text-[var(--green-600)] shrink-0" />
-                <span>Current medication regimen active (2 items)</span>
-              </div>
-              <div className="flex items-center gap-2 text-[var(--text)]">
-                <CheckCircle2 size={14} className="text-[var(--green-600)] shrink-0" />
-                <span>Allergies and conditions reviewed</span>
-              </div>
-            </div>
+            <ul className="pt-2 space-y-1.5 text-xs">
+              {readiness.map((r) => (
+                <li key={r.label} className="flex items-center gap-2">
+                  {r.done ? <CheckCircle2 size={14} className="text-[var(--green-600)] shrink-0" aria-label="Done" /> : <Circle size={14} className="text-[var(--muted)] shrink-0" aria-label="Not done" />}
+                  <span className={r.done ? "" : "text-[var(--muted)]"}>{r.label}</span>
+                </li>
+              ))}
+            </ul>
           </div>
-
           <div className="pt-4 border-t border-[var(--border)] mt-4 flex items-center gap-3">
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => onNavigateTab("visit-pack")}
-              className="flex-1"
-              iconRight={<ArrowRight size={14} />}
-            >
-              Generate Doctor Visit Pack
+            <Button variant="primary" size="sm" onClick={() => onNavigateTab("visit-pack")} className="flex-1" iconRight={<ArrowRight size={14} />}>
+              Build visit pack
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onNavigateTab("sharing")}
-            >
-              QR Share
+            <Button variant="outline" size="sm" onClick={() => onNavigateTab("sharing")}>
+              Share
             </Button>
           </div>
         </Card>

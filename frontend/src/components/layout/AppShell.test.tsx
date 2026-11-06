@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { screen, fireEvent } from "@testing-library/react";
+import { renderWithProviders as render } from "../../test/utils";
 import { describe, it, expect, vi } from "vitest";
 import { AppShell } from "./AppShell";
 import {

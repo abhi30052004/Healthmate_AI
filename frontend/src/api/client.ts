@@ -409,6 +409,78 @@ export async function deleteDocument(token: string, id: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Manual entry, observation add/reject, original-file preview
+// ---------------------------------------------------------------------------
+
+export interface ManualObservationInput {
+  test_name: string;
+  value: string;
+  unit?: string | null;
+  reference_range?: string | null;
+}
+
+export interface ManualEntryPayload {
+  profile_id?: string | null;
+  entry_type: "lab" | "vital" | "other";
+  /** YYYY-MM-DD */
+  entry_date: string;
+  /** HH:MM or HH:MM:SS */
+  entry_time?: string | null;
+  source_label?: string | null;
+  observations: ManualObservationInput[];
+}
+
+export async function createManualEntry(
+  token: string,
+  payload: ManualEntryPayload
+): Promise<DocumentItem> {
+  const res = await fetch(`${BASE}/api/documents/manual-entry`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new ApiError(res.status, await parseErrorMessage(res));
+  return res.json();
+}
+
+export async function addObservation(
+  token: string,
+  documentId: string,
+  payload: ManualObservationInput
+): Promise<ObservationItem> {
+  const res = await fetch(`${BASE}/api/documents/${documentId}/observations`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new ApiError(res.status, await parseErrorMessage(res));
+  return res.json();
+}
+
+export async function deleteObservation(
+  token: string,
+  documentId: string,
+  observationId: string
+): Promise<void> {
+  const res = await fetch(`${BASE}/api/documents/${documentId}/observations/${observationId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new ApiError(res.status, await parseErrorMessage(res));
+}
+
+/** Fetch the original file (auth required) as a blob for in-app preview. */
+export async function fetchDocumentBlob(token: string, id: string): Promise<Blob> {
+  const res = await fetch(`${BASE}/api/documents/${id}/download?inline=true`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new ApiError(res.status, await parseErrorMessage(res));
+  return res.blob();
+}
+
+export const MANUAL_ENTRY_MIME = "application/x-healthmate-manual";
+
+// ---------------------------------------------------------------------------
 // Medical Timeline & Trend Interfaces & Functions
 // ---------------------------------------------------------------------------
 
@@ -729,7 +801,8 @@ export async function sendChatMessage(
   token: string,
   conversationId: string,
   message: string,
-  includeUnverified: boolean = false
+  includeUnverified: boolean = false,
+  profileId?: string
 ): Promise<ChatAnswerResponse> {
   const res = await fetch(
     `${BASE}/api/medical-chat/conversations/${conversationId}/messages`,
@@ -742,6 +815,7 @@ export async function sendChatMessage(
       body: JSON.stringify({
         message,
         include_unverified: includeUnverified,
+        ...(profileId ? { profile_id: profileId } : {}),
       }),
     }
   );
@@ -1223,6 +1297,9 @@ export interface MedicationRecord {
   dosage_instructions?: string | null;
   route?: string | null;
   frequency?: string | null;
+  schedule_times?: string[];
+  schedule_days?: number[];
+  profile_id?: string | null;
   start_date?: string | null;
   end_date?: string | null;
   prescriber?: string | null;
@@ -1237,6 +1314,9 @@ export interface MedicationRecord {
 
 export interface MedicationCreate {
   name: string;
+  profile_id?: string | null;
+  schedule_times?: string[];
+  schedule_days?: number[];
   medication_type?: string | null;
   strength?: string | null;
   dosage_instructions?: string | null;
@@ -1253,6 +1333,8 @@ export interface MedicationCreate {
 
 export interface MedicationUpdate {
   name?: string | null;
+  schedule_times?: string[] | null;
+  schedule_days?: number[] | null;
   medication_type?: string | null;
   strength?: string | null;
   dosage_instructions?: string | null;
@@ -1278,6 +1360,7 @@ export interface AppointmentRecord {
   timezone?: string | null;
   status: "scheduled" | "completed" | "cancelled" | "rescheduled";
   notes?: string | null;
+  profile_id?: string | null;
   source_document_id?: string | null;
   source_document_title?: string | null;
   follow_up_tasks_count: number;
@@ -1287,6 +1370,7 @@ export interface AppointmentRecord {
 
 export interface AppointmentCreate {
   title: string;
+  profile_id?: string | null;
   appointment_type?: string | null;
   provider_name?: string | null;
   location?: string | null;
@@ -1317,6 +1401,7 @@ export interface FollowUpTask {
   due_at?: string | null;
   status: "pending" | "completed" | "dismissed";
   priority: "low" | "medium" | "high";
+  profile_id?: string | null;
   source_document_id?: string | null;
   source_document_title?: string | null;
   appointment_id?: string | null;
@@ -1328,6 +1413,7 @@ export interface FollowUpTask {
 
 export interface FollowUpTaskCreate {
   title: string;
+  profile_id?: string | null;
   description?: string | null;
   due_at?: string | null;
   status?: "pending" | "completed" | "dismissed";
@@ -1381,8 +1467,9 @@ export interface CareOverviewResponse {
 
 // API methods
 
-export async function getCareOverview(token: string): Promise<CareOverviewResponse> {
-  const res = await fetch(`${BASE}/api/care/overview`, {
+export async function getCareOverview(token: string, profileId?: string): Promise<CareOverviewResponse> {
+  const qs = profileId ? `?profile_id=${encodeURIComponent(profileId)}` : "";
+  const res = await fetch(`${BASE}/api/care/overview${qs}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) {
@@ -1394,9 +1481,10 @@ export async function getCareOverview(token: string): Promise<CareOverviewRespon
 
 export async function getCareCalendar(
   token: string,
-  params?: { startDate?: string; endDate?: string }
+  params?: { startDate?: string; endDate?: string; profile_id?: string }
 ): Promise<CareCalendarResponse> {
   const url = new URL(`${BASE}/api/care/calendar`);
+  if (params?.profile_id) url.searchParams.set("profile_id", params.profile_id);
   if (params?.startDate) url.searchParams.set("start_date", params.startDate);
   if (params?.endDate) url.searchParams.set("end_date", params.endDate);
 
@@ -1685,6 +1773,7 @@ export interface SearchQueryRequest {
   sort_by?: "relevance" | "date";
   page?: number;
   page_size?: number;
+  profile_id?: string;
 }
 
 export interface SearchResponse {
@@ -1710,6 +1799,7 @@ export async function searchMedicalRecords(
   if (params.sort_by) queryParams.set("sort_by", params.sort_by);
   if (params.page !== undefined) queryParams.set("page", String(params.page));
   if (params.page_size !== undefined) queryParams.set("page_size", String(params.page_size));
+  if (params.profile_id) queryParams.set("profile_id", params.profile_id);
 
   const res = await fetch(`${BASE}/api/medical-search?${queryParams.toString()}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -2154,6 +2244,7 @@ export interface FamilyProfile {
   emergency_contact_name?: string | null;
   emergency_contact_phone?: string | null;
   allergies_summary?: string | null;
+  conditions_summary?: string | null;
   avatar_color?: string | null;
   is_primary: boolean;
   is_active: boolean;
@@ -2168,6 +2259,7 @@ export interface FamilyProfile {
 
 export interface FamilyProfileCreatePayload {
   name: string;
+  conditions_summary?: string | null;
   relationship: RelationshipType;
   date_of_birth?: string | null;
   gender?: GenderType | null;
@@ -2183,6 +2275,7 @@ export interface FamilyProfileCreatePayload {
 
 export interface FamilyProfileUpdatePayload {
   name?: string;
+  conditions_summary?: string | null;
   relationship?: RelationshipType;
   date_of_birth?: string | null;
   gender?: GenderType | null;
@@ -2932,3 +3025,205 @@ export async function getMyAiUsage(token: string): Promise<AiUsageResponse> {
 }
 
 
+
+
+// ---------------------------------------------------------------------------
+// Dose tracking, symptom diary, account self-service
+// ---------------------------------------------------------------------------
+
+export type DoseOutcome = "taken" | "skipped" | "snoozed";
+
+export interface DoseSlot {
+  medication_id: string;
+  medication_name: string;
+  strength?: string | null;
+  instructions?: string | null;
+  profile_id?: string | null;
+  scheduled_date: string;
+  scheduled_time: string;
+  outcome: DoseOutcome | null;
+  log_id?: string | null;
+  logged_at?: string | null;
+  snoozed_until?: string | null;
+}
+
+export interface AdherenceDay {
+  date: string;
+  expected: number;
+  taken: number;
+  skipped: number;
+  missed: number;
+}
+
+export interface AdherenceSummary {
+  days: number;
+  expected: number;
+  taken: number;
+  skipped: number;
+  missed: number;
+  taken_percent: number | null;
+  per_day: AdherenceDay[];
+  note: string;
+}
+
+async function authedJson<T>(
+  token: string,
+  path: string,
+  init: { method?: string; body?: unknown } = {}
+): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: init.method ?? "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(init.body !== undefined ? { "Content-Type": "application/json" } : {}),
+    },
+    body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+  });
+  if (!res.ok) throw new ApiError(res.status, await parseErrorMessage(res));
+  if (res.status === 204) return undefined as T;
+  return res.json();
+}
+
+export function listDoseSlots(token: string, date: string, profileId: string): Promise<DoseSlot[]> {
+  return authedJson(token, `/api/care/doses?date=${date}&profile_id=${encodeURIComponent(profileId)}`);
+}
+
+export function logDose(
+  token: string,
+  payload: {
+    medication_id: string;
+    scheduled_date: string;
+    scheduled_time: string;
+    outcome: DoseOutcome;
+    snooze_minutes?: number;
+    note?: string | null;
+  }
+): Promise<unknown> {
+  return authedJson(token, "/api/care/dose-logs", { method: "POST", body: payload });
+}
+
+export function undoDoseLog(token: string, logId: string): Promise<void> {
+  return authedJson(token, `/api/care/dose-logs/${logId}`, { method: "DELETE" });
+}
+
+export function getAdherence(
+  token: string,
+  profileId: string,
+  today: string,
+  days = 7
+): Promise<AdherenceSummary> {
+  return authedJson(
+    token,
+    `/api/care/adherence?days=${days}&today=${today}&profile_id=${encodeURIComponent(profileId)}`
+  );
+}
+
+export type SymptomSeverity = "mild" | "moderate" | "severe";
+
+export interface SymptomEntryItem {
+  id: string;
+  title: string;
+  severity: SymptomSeverity;
+  notes?: string | null;
+  occurred_at: string;
+  include_in_visit_pack: boolean;
+  profile_id?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SymptomPayload {
+  title: string;
+  severity: SymptomSeverity;
+  notes?: string | null;
+  occurred_at: string;
+  include_in_visit_pack: boolean;
+  profile_id: string;
+}
+
+export function listSymptoms(token: string, profileId: string): Promise<SymptomEntryItem[]> {
+  return authedJson(token, `/api/symptoms?profile_id=${encodeURIComponent(profileId)}`);
+}
+
+export function createSymptom(token: string, payload: SymptomPayload): Promise<SymptomEntryItem> {
+  return authedJson(token, "/api/symptoms", { method: "POST", body: payload });
+}
+
+export function updateSymptom(
+  token: string,
+  id: string,
+  payload: Partial<Omit<SymptomPayload, "profile_id">>
+): Promise<SymptomEntryItem> {
+  return authedJson(token, `/api/symptoms/${id}`, { method: "PATCH", body: payload });
+}
+
+export function deleteSymptom(token: string, id: string): Promise<void> {
+  return authedJson(token, `/api/symptoms/${id}`, { method: "DELETE" });
+}
+
+export function renameAccount(token: string, name: string) {
+  return authedJson<User>(token, "/api/account", { method: "PATCH", body: { name } });
+}
+
+export async function downloadAccountExport(token: string): Promise<void> {
+  const res = await fetch(`${BASE}/api/account/export`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new ApiError(res.status, await parseErrorMessage(res));
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = window.document.createElement("a");
+  a.href = url;
+  a.download = "healthmate-export.json";
+  window.document.body.appendChild(a);
+  a.click();
+  window.document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+}
+
+export function deleteAccount(token: string, password: string): Promise<void> {
+  return authedJson(token, "/api/account/delete", { method: "POST", body: { password } });
+}
+
+
+// ---------------------------------------------------------------- Emergency card (public QR)
+
+export interface EmergencyLinkStatus {
+  enabled: boolean;
+  token: string | null;
+}
+
+export interface PublicEmergencyCard {
+  name: string;
+  age_years: number | null;
+  blood_type: string | null;
+  allergies: string | null;
+  conditions: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+  updated_at: string;
+}
+
+async function emergencyLinkRequest(
+  token: string,
+  profileId: string,
+  method: "GET" | "POST" | "DELETE",
+  query = ""
+): Promise<EmergencyLinkStatus> {
+  const res = await fetch(`${BASE}/api/family-profiles/${profileId}/emergency-link${query}`, {
+    method,
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new ApiError(res.status, await parseErrorMessage(res));
+  return res.json();
+}
+
+export const getEmergencyLink = (token: string, profileId: string) => emergencyLinkRequest(token, profileId, "GET");
+export const enableEmergencyLink = (token: string, profileId: string, rotate = false) =>
+  emergencyLinkRequest(token, profileId, "POST", rotate ? "?rotate=true" : "");
+export const disableEmergencyLink = (token: string, profileId: string) => emergencyLinkRequest(token, profileId, "DELETE");
+
+/** Public (no login): what a first responder sees after scanning the QR code. */
+export async function getPublicEmergencyCard(cardToken: string): Promise<PublicEmergencyCard> {
+  const res = await fetch(`${BASE}/api/emergency/${encodeURIComponent(cardToken)}`);
+  if (!res.ok) throw new ApiError(res.status, await parseErrorMessage(res));
+  return res.json();
+}

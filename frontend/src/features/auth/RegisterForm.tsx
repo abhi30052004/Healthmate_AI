@@ -4,10 +4,17 @@ import { User, Mail, Lock, ShieldCheck, Check, ArrowRight, ArrowLeft } from "luc
 import { Input, PasswordInput } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
 import { AnimatedCheck } from "../../components/motion/MotionHelpers";
-import { authService, ApiError } from "../../services/authService";
+import { authService, ApiError, type LoginResponse } from "../../services/authService";
+
+export interface RegisterSuccessDetails {
+  /** Present when the automatic sign-in after registration succeeded. */
+  login: LoginResponse | null;
+  profileName: string;
+  managingFor: "self" | "parent" | "child" | "other";
+}
 
 export interface RegisterFormProps {
-  onSuccess: (email: string) => void;
+  onSuccess: (email: string, details?: RegisterSuccessDetails) => void;
   onNavigateLogin: () => void;
 }
 
@@ -86,9 +93,21 @@ export function RegisterForm({ onSuccess, onNavigateLogin }: RegisterFormProps) 
         password,
       });
 
+      // Sign in straight away so the new user lands in their workspace.
+      let login: LoginResponse | null = null;
+      try {
+        login = await authService.login({ email: email.trim(), password });
+      } catch {
+        login = null; // fall back to the manual sign-in screen
+      }
+
       setIsDone(true);
       setTimeout(() => {
-        onSuccess(email.trim());
+        onSuccess(email.trim(), {
+          login,
+          profileName: profileName.trim() || name.trim(),
+          managingFor,
+        });
       }, 1200);
     } catch (err: unknown) {
       if (err instanceof ApiError) {
@@ -109,7 +128,7 @@ export function RegisterForm({ onSuccess, onNavigateLogin }: RegisterFormProps) 
           Account Created Successfully!
         </h3>
         <p className="text-xs text-[var(--muted)]">
-          Redirecting to your workspace sign in...
+          Opening your workspace...
         </p>
       </div>
     );

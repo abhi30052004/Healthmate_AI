@@ -603,9 +603,15 @@ async def test_incompatible_units_are_not_compared_as_equivalent_values():
 @pytest.mark.anyio
 async def test_provider_timeout_or_failure_produces_controlled_safe_fallback(monkeypatch):
     """Test 19: Provider timeout or failure produces a controlled fallback."""
-    monkeypatch.setenv("MEDICAL_CHAT_PROVIDER", "openai")
-    monkeypatch.setenv("MEDICAL_CHAT_API_KEY", "sk-invalid-key-for-test")
-    monkeypatch.setenv("MEDICAL_CHAT_REQUEST_TIMEOUT", "0.001")
+    from app.services import medical_chat as chat_service
+
+    # Pretend a provider is configured, but make the call fail (timeout / bad key / outage).
+    monkeypatch.setattr(chat_service, "resolve_llm_target", lambda *a, **k: object())
+
+    async def failing_llm(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(chat_service, "llm_complete", failing_llm)
 
     evidence = [
         CitationItem(

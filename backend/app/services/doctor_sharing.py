@@ -567,9 +567,9 @@ def get_shared_health_summary(
             shared_appts.append(
                 DoctorSharedAppointmentItem(
                     id=a.id,
-                    doctor_name=a.doctor_name,
-                    specialty=a.specialty,
-                    appointment_date=a.appointment_date,
+                    doctor_name=a.provider_name or a.title,
+                    specialty=a.appointment_type or a.title,
+                    appointment_date=a.scheduled_at,
                     location=a.location,
                     notes=a.notes,
                 )

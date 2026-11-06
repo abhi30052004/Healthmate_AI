@@ -80,54 +80,50 @@ test.describe("HealthMate UI Polish & Modern Architecture", () => {
     expect(afterScrollScrolled).toBe("true");
   });
 
-  test("3. Bento grid renders 6 distinct cards with live mini previews", async ({ page }) => {
+  test("3. Feature stories and bento tiles render, and the demos respond to clicks", async ({ page }) => {
     await page.goto("/");
     await page.waitForLoadState("networkidle");
 
-    // Bento section
-    const bentoSection = page.locator("#features");
-    await expect(bentoSection).toBeVisible();
+    await expect(page.locator("#features")).toBeVisible();
+    for (const name of [/Upload once/i, /See what is changing/i, /Never miss a dose/i, /Ask your records/i]) {
+      await expect(page.getByRole("heading", { name })).toBeVisible();
+    }
+    for (const name of ["Family profiles", "Emergency card", "Doctor visit pack", "Symptom diary", "Appointments & checklists", "Yours to export or delete"]) {
+      await expect(page.getByRole("heading", { name })).toBeVisible();
+    }
 
-    await expect(page.getByRole("heading", { name: "Records & OCR" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Trend Graphs" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Medicine Schedules" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Doctor Visit Pack" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Family & Caregivers" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Emergency Card" })).toBeVisible();
+    // Family switcher is interactive
+    await page.getByRole("tab", { name: /Meera/ }).click();
+    await expect(page.getByTestId("family-demo")).toContainText("Type 2 diabetes");
 
-    // Provenance badge and preview items
-    await expect(page.getByText("SampleLab_Metabolic.pdf")).toBeVisible();
-    await expect(page.getByText("Blood O+")).toBeVisible();
+    // Dose tracker is interactive: tapping a dose updates the ring
+    const doseDemo = page.getByTestId("dose-demo");
+    await expect(doseDemo).toContainText("1/4");
+    await doseDemo.getByRole("button", { name: /Vitamin D3/ }).click();
+    await expect(doseDemo).toContainText("2/4");
   });
 
-  test("4. Interactive Recharts Trend Demo renders with tooltip and range buttons", async ({ page }) => {
+  test("4. Trend chart and QR share demo are interactive", async ({ page }) => {
     await page.goto("/");
     await page.waitForLoadState("networkidle");
 
-    const demoSection = page.locator("#demo");
-    await expect(demoSection).toBeVisible();
+    const trend = page.getByTestId("trend-demo");
+    await expect(trend).toBeVisible();
+    await expect(trend.getByRole("button", { name: "3M", exact: true })).toBeVisible();
+    await trend.getByRole("button", { name: "1Y", exact: true }).click();
+    await expect(trend.getByRole("button", { name: "1Y", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(trend.locator("svg").first()).toBeVisible();
 
-    // Range buttons
-    const btn3M = page.getByRole("button", { name: "3M", exact: true });
-    const btn6M = page.getByRole("button", { name: "6M", exact: true });
-    const btn1Y = page.getByRole("button", { name: "1Y", exact: true });
+    // Accessible table alternative
+    await trend.getByRole("button", { name: /Show chart data as a table/i }).click();
+    await expect(trend.getByRole("table")).toBeVisible();
 
-    await expect(btn3M).toBeVisible();
-    await expect(btn6M).toBeVisible();
-    await expect(btn1Y).toBeVisible();
-
-    // Area chart SVG container
-    const chartSvg = demoSection.locator(".recharts-surface");
-    await expect(chartSvg).toBeVisible();
-
-    // Switch to accessible table view
-    const tableToggleBtn = page.getByRole("button", { name: /Toggle Accessible Table/i });
-    await expect(tableToggleBtn).toBeVisible();
-    await tableToggleBtn.click();
-
-    // Verify table is visible
-    const table = page.locator("table[aria-label='Blood Pressure Trend Data']");
-    await expect(table).toBeVisible();
+    const qr = page.getByTestId("qr-demo");
+    await qr.scrollIntoViewIfNeeded();
+    await qr.getByRole("button", { name: "Revoke link" }).click();
+    await expect(qr).toContainText("Link revoked");
+    await qr.getByRole("button", { name: /Create a new link/i }).click();
+    await expect(qr).not.toContainText("Link revoked");
   });
 
   test("5. Final CTA has high contrast (>= 4.5:1) white text on dark green gradient", async ({ page }) => {
@@ -184,8 +180,8 @@ test.describe("HealthMate UI Polish & Modern Architecture", () => {
     // /s/:token
     await page.goto("/s/SH-DEMO-99");
     await page.waitForLoadState("networkidle");
-    await expect(page.getByText(/HealthMate AI Clinician Portal/i)).toBeVisible();
-    await expect(page.getByText(/Token: SH-DEMO-99/i)).toBeVisible();
+    // An unknown/expired token must fail closed with a clear message (no patient data).
+    await expect(page.getByRole("alert")).toContainText(/isn't available/i);
   });
 
   test("8. Capture visual screenshots at 1440px desktop and 390px mobile", async ({ page }, testInfo) => {

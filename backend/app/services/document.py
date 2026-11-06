@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.config import get_settings
 from app.models.document import Document, DocumentObservation
 from app.models.user import User
-from app.schemas.document import ObservationUpdate
+from app.schemas.document import ManualEntryCreate, ObservationCreate, ObservationUpdate
 from app.services.extraction import extract_document_content
 from app.services.medical_parser import compute_abnormal_flag, parse_medical_record, parse_numeric_value
 from app.services.normalization import normalize_test_name
@@ -509,8 +509,124 @@ def delete_user_document(
     document_id: uuid.UUID,
     current_user: User,
 ) -> None:
-    """Delete document record and associated disk file."""
-    doc, file_path = get_user_document_file_path(db, document_id, current_user)
-    safe_unlink(file_path)
+    """Delete document record and associated disk file (if any: manual entries have none)."""
+    doc = get_user_document(db, document_id, current_user)
+    storage_root = Path(get_settings().document_storage_dir).resolve()
+    file_path = (storage_root / doc.storage_key).resolve()
+    try:
+        file_path.relative_to(storage_root)
+        if file_path.is_file():
+            safe_unlink(file_path)
+    except ValueError:
+        pass  # key escapes storage root: never touch the filesystem
     db.delete(doc)
+    db.commit()
+
+
+MANUAL_MIME_TYPE = "application/x-healthmate-manual"
+
+
+def _build_observation(
+    document_id: uuid.UUID,
+    owner_id: uuid.UUID,
+    item: ObservationCreate,
+    source_text: str,
+) -> DocumentObservation:
+    clean_value, numeric = parse_numeric_value(item.value)
+    normalized_name, category = normalize_test_name(item.test_name)
+    reference = item.reference_range.strip() if item.reference_range else None
+    return DocumentObservation(
+        document_id=document_id,
+        owner_id=owner_id,
+        test_name=item.test_name,
+        normalized_test_name=normalized_name,
+        category=category,
+        value=clean_value,
+        numeric_value=numeric,
+        unit=item.unit.strip() if item.unit else None,
+        reference_range=reference,
+        flag=compute_abnormal_flag(numeric, clean_value, reference) if reference else None,
+        source_page=1,
+        source_text=source_text,
+        is_low_confidence=False,
+        is_reviewed=True,
+    )
+
+
+def create_manual_entry(db: Session, current_user: User, payload: ManualEntryCreate) -> Document:
+    """Create a verified, file-less record from user-entered values (labs, vitals, etc.)."""
+    if payload.profile_id is not None:
+        from app.services.family_profile import verify_profile_access
+
+        verify_profile_access(db, current_user, payload.profile_id)
+
+    doc_id = uuid.uuid4()
+    when = payload.entry_date.isoformat()
+    if payload.entry_time is not None:
+        when = f"{when} {payload.entry_time.strftime('%H:%M')}"
+    label = {"lab": "Lab results", "vital": "Vitals", "other": "Health record"}[payload.entry_type]
+
+    document = Document(
+        id=doc_id,
+        owner_id=current_user.id,
+        profile_id=payload.profile_id,
+        filename=f"Manual entry - {label} - {payload.entry_date.isoformat()}",
+        storage_key=f"manual/{doc_id.hex}",
+        mime_type=MANUAL_MIME_TYPE,
+        file_size=0,
+        checksum_sha256=hashlib.sha256(f"manual:{doc_id.hex}".encode()).hexdigest(),
+        processing_status="completed",
+        extracted_text=None,
+        page_count=None,
+        ocr_applied=False,
+        document_date=payload.entry_date.isoformat(),
+        lab_name=payload.source_label.strip() if payload.source_label else None,
+        is_verified=True,
+        verified_at=datetime.now(timezone.utc),
+    )
+    try:
+        db.add(document)
+        db.flush()
+        for item in payload.observations:
+            db.add(_build_observation(doc_id, current_user.id, item, f"Entered manually on {when}"))
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return get_user_document(db, doc_id, current_user)
+
+
+def add_document_observation(
+    db: Session,
+    document_id: uuid.UUID,
+    current_user: User,
+    payload: ObservationCreate,
+) -> DocumentObservation:
+    """Add a result the extractor missed (reviewed by the user as they add it)."""
+    doc = get_user_document(db, document_id, current_user)
+    obs = _build_observation(doc.id, current_user.id, payload, "Added during review")
+    db.add(obs)
+    db.commit()
+    db.refresh(obs)
+    return obs
+
+
+def delete_document_observation(
+    db: Session,
+    document_id: uuid.UUID,
+    observation_id: uuid.UUID,
+    current_user: User,
+) -> None:
+    """Reject (remove) a wrongly extracted observation."""
+    get_user_document(db, document_id, current_user)
+    obs = db.scalars(
+        select(DocumentObservation).where(
+            DocumentObservation.id == observation_id,
+            DocumentObservation.document_id == document_id,
+            DocumentObservation.owner_id == current_user.id,
+        )
+    ).first()
+    if obs is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Observation not found.")
+    db.delete(obs)
     db.commit()

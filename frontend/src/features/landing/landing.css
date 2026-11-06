@@ -1,0 +1,142 @@
+/* Scoped to the public landing + auth pages (.lp). Nothing here leaks into the signed-in app. */
+
+.lp {
+  --lp-ink: #0b2b30;
+  --lp-deep: #053f44;
+  --lp-teal: #087a83;
+  --lp-emerald: #2e9b79;
+  --lp-mint: #43b58f;
+  --lp-mist: #eef8f4;
+  --lp-coral: #ff7a59;
+  --lp-amber: #f6b64a;
+  --lp-sky: #4c8dff;
+  --lp-violet: #7c6cff;
+  --lp-line: rgba(11, 43, 48, 0.08);
+  color: var(--lp-ink);
+}
+
+/* ---------- ambient motion ---------- */
+@keyframes lp-float {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -12px, 0); }
+}
+@keyframes lp-float-alt {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(-2deg); }
+  50% { transform: translate3d(0, 10px, 0) rotate(2deg); }
+}
+@keyframes lp-spin { to { transform: rotate(360deg); } }
+@keyframes lp-spin-rev { to { transform: rotate(-360deg); } }
+@keyframes lp-aurora {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(5%, -7%, 0) scale(1.18); }
+  100% { transform: translate3d(-4%, 5%, 0) scale(1.05); }
+}
+@keyframes lp-marquee { to { transform: translateX(-50%); } }
+@keyframes lp-scan {
+  0% { top: 2%; opacity: 0; }
+  8% { opacity: 1; }
+  92% { opacity: 1; }
+  100% { top: 96%; opacity: 0; }
+}
+@keyframes lp-chip {
+  0%, 6% { opacity: 0; transform: translateY(10px) scale(0.95); }
+  14%, 88% { opacity: 1; transform: none; }
+  96%, 100% { opacity: 0; transform: translateY(-4px); }
+}
+@keyframes lp-ecg {
+  from { stroke-dashoffset: 0.32; }
+  to { stroke-dashoffset: -1; }
+}
+@keyframes lp-ring {
+  0% { transform: scale(0.7); opacity: 0.55; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+@keyframes lp-shine {
+  from { transform: translateX(-120%) skewX(-18deg); }
+  to { transform: translateX(260%) skewX(-18deg); }
+}
+@keyframes lp-blink { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+@keyframes lp-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+.lp-float { animation: lp-float 7s ease-in-out infinite; }
+.lp-float-slow { animation: lp-float 9s ease-in-out infinite; }
+.lp-float-alt { animation: lp-float-alt 8s ease-in-out infinite; }
+.lp-spin-slow { animation: lp-spin 60s linear infinite; }
+.lp-spin-rev { animation: lp-spin-rev 80s linear infinite; }
+.lp-aurora { animation: lp-aurora 18s ease-in-out infinite alternate; }
+.lp-aurora-b { animation: lp-aurora 24s ease-in-out infinite alternate-reverse; }
+.lp-marquee { width: max-content; animation: lp-marquee 38s linear infinite; }
+.lp-marquee:hover { animation-play-state: paused; }
+.lp-scan { animation: lp-scan 7s ease-in-out infinite; }
+.lp-chip { animation: lp-chip 7s ease-in-out infinite both; }
+.lp-ecg { stroke-dasharray: 0.32 1.4; animation: lp-ecg 2.6s linear infinite; }
+.lp-ring { animation: lp-ring 2.8s ease-out infinite; }
+.lp-blink { animation: lp-blink 1.2s ease-in-out infinite; }
+
+.lp-shine { position: relative; overflow: hidden; }
+.lp-shine::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.28), transparent);
+  transform: translateX(-120%) skewX(-18deg);
+  animation: lp-shine 4.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ---------- surfaces ---------- */
+.lp-glass {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 18px 40px -18px rgba(5, 63, 68, 0.35), 0 2px 6px rgba(5, 63, 68, 0.06);
+}
+.lp-glass-dark {
+  background: rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.lp-dots {
+  background-image: radial-gradient(rgba(8, 122, 131, 0.22) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+.lp-grid-dark {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+.lp-text-gradient {
+  background: linear-gradient(100deg, var(--lp-teal), var(--lp-emerald) 45%, var(--lp-sky));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.lp-text-gradient-light {
+  background: linear-gradient(100deg, #9ff0d2, #7ad8ff 60%, #c5b8ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.lp-noise::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.35;
+  mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='.5'/></svg>");
+}
+
+/* ---------- reduced motion: show everything, move nothing ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .lp *, .lp *::before, .lp *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+  .lp-ecg { stroke-dasharray: none; }
+}

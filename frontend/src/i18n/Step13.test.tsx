@@ -1,5 +1,6 @@
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { screen, fireEvent } from "@testing-library/react";
+import { renderWithProviders as render } from "../test/utils";
 import { describe, it, expect } from "vitest";
 import { I18nProvider, useI18n, LanguageSwitcher } from "./i18nContext";
 import { AppShell } from "../components/layout/AppShell";

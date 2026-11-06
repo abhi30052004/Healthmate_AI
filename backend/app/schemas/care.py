@@ -1,8 +1,32 @@
+import re
 import uuid
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+_HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+def _clean_times(value: list[str] | None) -> list[str]:
+    if not value:
+        return []
+    out = sorted({v.strip() for v in value})
+    for v in out:
+        if not _HHMM.match(v):
+            raise ValueError(f"Invalid dose time '{v}'. Use 24-hour HH:MM.")
+    if len(out) > 12:
+        raise ValueError("At most 12 dose times per day.")
+    return out
+
+
+def _clean_days(value: list[int] | None) -> list[int]:
+    if not value:
+        return []
+    out = sorted(set(value))
+    if any(d < 0 or d > 6 for d in out):
+        raise ValueError("Days must be 0 (Monday) to 6 (Sunday).")
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -16,6 +40,8 @@ class MedicationBase(BaseModel):
     dosage_instructions: str | None = Field(None, description="Exact user-entered instructions, e.g. 'Take 1 tablet by mouth daily'")
     route: str | None = Field(None, max_length=100, description="Route of administration, e.g. 'Oral'")
     frequency: str | None = Field(None, max_length=150, description="Frequency, e.g. 'Once daily in the morning'")
+    schedule_times: list[str] = Field(default_factory=list, description="24h HH:MM dose times, as prescribed")
+    schedule_days: list[int] = Field(default_factory=list, description="Weekdays 0=Mon..6=Sun; empty = every day")
     start_date: date | None = None
     end_date: date | None = None
     prescriber: str | None = Field(None, max_length=255, description="Prescribing clinician or facility")
@@ -24,6 +50,16 @@ class MedicationBase(BaseModel):
     source_document_id: uuid.UUID | None = None
     profile_id: uuid.UUID | None = None
     status: Literal["active", "paused", "completed", "archived"] = "active"
+
+    @field_validator("schedule_times", mode="before")
+    @classmethod
+    def _times(cls, v):
+        return _clean_times(v)
+
+    @field_validator("schedule_days", mode="before")
+    @classmethod
+    def _days(cls, v):
+        return _clean_days(v)
 
 
 class MedicationCreate(MedicationBase):
@@ -37,6 +73,8 @@ class MedicationUpdate(BaseModel):
     dosage_instructions: str | None = None
     route: str | None = None
     frequency: str | None = None
+    schedule_times: list[str] | None = None
+    schedule_days: list[int] | None = None
     start_date: date | None = None
     end_date: date | None = None
     prescriber: str | None = None
@@ -45,6 +83,16 @@ class MedicationUpdate(BaseModel):
     source_document_id: uuid.UUID | None = None
     profile_id: uuid.UUID | None = None
     status: Literal["active", "paused", "completed", "archived"] | None = None
+
+    @field_validator("schedule_times", mode="before")
+    @classmethod
+    def _times(cls, v):
+        return None if v is None else _clean_times(v)
+
+    @field_validator("schedule_days", mode="before")
+    @classmethod
+    def _days(cls, v):
+        return None if v is None else _clean_days(v)
 
 
 class MedicationResponse(MedicationBase):

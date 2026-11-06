@@ -40,6 +40,7 @@ class FamilyProfileBase(BaseModel):
     emergency_contact_name: str | None = Field(None, max_length=255, description="Emergency contact name")
     emergency_contact_phone: str | None = Field(None, max_length=50, description="Emergency contact phone number")
     allergies_summary: str | None = Field(None, max_length=2000, description="Known allergies or sensitivities")
+    conditions_summary: str | None = Field(None, max_length=2000, description="User-entered known conditions")
     avatar_color: str | None = Field(None, max_length=50, description="Avatar theme color or code")
     is_dependent: bool = Field(default=False, description="Whether this individual is a legal dependent")
     consent_status: ConsentStatusType = Field(default="authorized", description="Authorization or consent state")
@@ -74,6 +75,7 @@ class FamilyProfileUpdate(BaseModel):
     emergency_contact_name: str | None = Field(None, max_length=255)
     emergency_contact_phone: str | None = Field(None, max_length=50)
     allergies_summary: str | None = Field(None, max_length=2000)
+    conditions_summary: str | None = Field(None, max_length=2000)
     avatar_color: str | None = Field(None, max_length=50)
     is_dependent: bool | None = None
     consent_status: ConsentStatusType | None = None
@@ -128,3 +130,23 @@ class FamilyProfileDeactivateResponse(BaseModel):
         "historical medical documents, observations, care records, and reminders remain "
         "securely preserved."
     )
+
+
+class EmergencyLinkStatus(BaseModel):
+    """Owner view of a profile's public emergency-card link."""
+
+    enabled: bool
+    token: str | None = None
+
+
+class PublicEmergencyCard(BaseModel):
+    """What a first responder sees after scanning the QR code. Deliberately minimal."""
+
+    name: str
+    age_years: int | None = None
+    blood_type: str | None = None
+    allergies: str | None = None
+    conditions: str | None = None
+    emergency_contact_name: str | None = None
+    emergency_contact_phone: str | None = None
+    updated_at: datetime

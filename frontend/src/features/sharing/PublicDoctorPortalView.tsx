@@ -1,170 +1,175 @@
-import React, { useState } from "react";
-import { Stethoscope, ShieldCheck, Clock, FileText, Pill, Activity, AlertCircle, Lock } from "lucide-react";
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { ShieldCheck, Clock, FileText, Pill, Calendar, AlertCircle, Download, Loader2 } from "lucide-react";
 import { Badge } from "../../components/ui/Badge";
-import { Tabs, TabPanel } from "../../components/ui/Tabs";
+import { Card } from "../../components/ui/Card";
+import {
+  getSharedDocumentDownloadUrl,
+  getSharedHealthPortalView,
+  getSharedVisitPackDownloadUrl,
+} from "../../api/client";
+import { formatDate, formatDateTime } from "../../lib/dates";
 
 export interface PublicDoctorPortalViewProps {
   shareToken: string;
-  patientName?: string;
-  expiresIn?: string;
 }
 
-export function PublicDoctorPortalView({
-  shareToken,
-  patientName = "Patient Record (Verified)",
-  expiresIn = "Expires in 23 hours",
-}: PublicDoctorPortalViewProps) {
-  const [activeTab, setActiveTab] = useState("summary");
+export function PublicDoctorPortalView({ shareToken }: PublicDoctorPortalViewProps) {
+  const query = useQuery({
+    queryKey: ["shared-portal", shareToken],
+    queryFn: () => getSharedHealthPortalView(shareToken),
+    retry: false,
+    staleTime: 0,
+    gcTime: 0,
+  });
 
-  const tabs = [
-    { id: "summary", label: "Consultation Summary", icon: <FileText size={15} /> },
-    { id: "labs", label: "Laboratory Findings", icon: <Activity size={15} /> },
-    { id: "meds", label: "Active Prescriptions", icon: <Pill size={15} /> },
-  ];
+  if (query.isLoading) {
+    return (
+      <div role="status" className="min-h-[50vh] flex items-center justify-center gap-2 text-sm text-[var(--muted)]">
+        <Loader2 className="animate-spin" size={18} aria-hidden="true" /> Opening shared records…
+      </div>
+    );
+  }
+
+  if (query.isError || !query.data) {
+    const status = (query.error as { status?: number } | null)?.status;
+    return (
+      <div role="alert" className="max-w-md mx-auto mt-16 p-8 rounded-xl bg-white border border-[var(--border)] text-center space-y-3">
+        <AlertCircle className="mx-auto text-[var(--warning)]" size={32} aria-hidden="true" />
+        <h1 className="text-lg font-display font-bold">This link isn't available</h1>
+        <p className="text-sm text-[var(--muted)]">
+          {status === 0
+            ? "We couldn't reach HealthMate. Check your connection and try again."
+            : "It may have expired or been revoked by the patient, or the address may be mistyped. Please ask them for a new link."}
+        </p>
+      </div>
+    );
+  }
+
+  const v = query.data;
+  const r = v.shared_resources;
 
   return (
-    <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] flex flex-col">
-      {/* Read-Only Top Watermark Banner */}
-      <div className="bg-[var(--green-900)] text-white text-xs py-2 px-4 flex items-center justify-between">
+    <div className="bg-[var(--bg)] text-[var(--text)] flex flex-col" data-testid="doctor-portal">
+      <div className="bg-[var(--green-900)] text-white text-xs py-2 px-4 flex items-center justify-between rounded-t-xl">
         <div className="flex items-center gap-2">
-          <ShieldCheck size={14} className="text-[var(--green-500)]" />
+          <ShieldCheck size={14} aria-hidden="true" />
           <span className="font-semibold">HealthMate AI Clinician Portal</span>
-          <span className="opacity-75">· Verified Read-Only Session</span>
+          <span className="opacity-75">· Read-only</span>
         </div>
         <div className="flex items-center gap-1.5 opacity-80">
-          <Clock size={13} />
-          <span>{expiresIn}</span>
+          <Clock size={13} aria-hidden="true" />
+          <span>Link valid until {formatDateTime(v.expires_at)}</span>
         </div>
       </div>
 
-      {/* Clinician Header */}
-      <header className="bg-white border-b border-[var(--border)] p-6 shadow-sm">
-        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <header className="bg-white border border-[var(--border)] border-t-0 p-6 rounded-b-xl shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--green-800)] bg-[var(--green-50)] px-2.5 py-1 rounded-full border border-[var(--green-100)]">
-              Authorised Time-Limited Clinical Share
+              Shared with {v.doctor_name}
             </span>
-            <h1 className="text-2xl font-display font-bold text-[var(--text)] mt-1">
-              {patientName}
-            </h1>
+            <h1 className="text-2xl font-display font-bold mt-1">{v.patient_name}</h1>
             <p className="text-xs text-[var(--muted)]">
-              Authorized by profile owner for doctor appointment review.
+              {[v.patient_age != null ? `${v.patient_age} years` : null, v.patient_gender, v.patient_relationship].filter(Boolean).join(" · ")}
             </p>
           </div>
-
-          <div className="flex items-center gap-2">
-            <Badge variant="verified">Verified Facts Only</Badge>
-          </div>
+          <Badge variant="verified">Shared by the patient</Badge>
         </div>
+        {v.notes && <p className="mt-4 p-3 rounded-lg bg-[var(--bg)] text-sm whitespace-pre-wrap"><span className="font-semibold">Note from patient: </span>{v.notes}</p>}
+        {(v.allergies_summary || v.emergency_contact) && (
+          <dl className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+            {v.allergies_summary && (
+              <div>
+                <dt className="text-xs text-[var(--muted)]">Allergies (self-reported)</dt>
+                <dd className="font-medium">{v.allergies_summary}</dd>
+              </div>
+            )}
+            {v.emergency_contact && (
+              <div>
+                <dt className="text-xs text-[var(--muted)]">Emergency contact</dt>
+                <dd className="font-medium">{v.emergency_contact}</dd>
+              </div>
+            )}
+          </dl>
+        )}
       </header>
 
-      {/* Main Tabbed Report Viewer */}
-      <main className="flex-1 max-w-5xl w-full mx-auto p-6 space-y-6">
-        <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
-
-        {/* Tab 1: Consultation Summary */}
-        <TabPanel id="summary" activeTab={activeTab}>
-          <div className="space-y-6 bg-white p-6 rounded-xl border border-[var(--border)] shadow-1">
-            <div className="space-y-2 border-b border-[var(--border)] pb-4">
-              <h2 className="text-base font-display font-bold text-[var(--green-900)]">
-                Clinical Consultation Overview
-              </h2>
-              <p className="text-xs text-[var(--muted)]">
-                The following observations and medications have been verified against original clinical reports.
-              </p>
+      <main className="py-6 space-y-6">
+        {r.include_visit_pack && v.has_visit_pack && (
+          <Card className="p-5 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="font-display font-semibold text-sm">Visit summary</h2>
+              <p className="text-xs text-[var(--muted)]">A one-document summary prepared by the patient.</p>
             </div>
+            <a href={getSharedVisitPackDownloadUrl(shareToken)} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--green-700)] text-white text-xs font-semibold" download>
+              <Download size={14} aria-hidden="true" /> Download PDF
+            </a>
+          </Card>
+        )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-4 rounded-lg bg-[var(--green-50)] border border-[var(--green-100)] space-y-1">
-                <span className="text-xs font-semibold text-[var(--green-800)]">Recent Blood Pressure</span>
-                <p className="text-2xl font-bold tabular-nums text-[var(--text)]">
-                  120/80 <span className="text-xs font-normal text-[var(--muted)]">mmHg</span>
-                </p>
-                <p className="text-[11px] text-[var(--muted)]">Observed on 28 Oct 2026 · Stable</p>
-              </div>
+        {r.include_medications && (
+          <section aria-label="Medications" className="space-y-2">
+            <h2 className="text-sm font-display font-semibold flex items-center gap-2"><Pill size={15} aria-hidden="true" /> Medications</h2>
+            {v.medications.length === 0 ? (
+              <p className="text-xs text-[var(--muted)]">None recorded.</p>
+            ) : (
+              <Card className="divide-y divide-[var(--border)]">
+                {v.medications.map((m) => (
+                  <div key={m.id} className="p-3 text-xs flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <span className="font-semibold">{m.name}</span> <span className="text-[var(--muted)]">{m.dosage}</span>
+                      {m.notes && <p className="text-[var(--muted)] mt-0.5">{m.notes}</p>}
+                    </div>
+                    <span className="text-[var(--muted)]">{m.frequency}</span>
+                  </div>
+                ))}
+              </Card>
+            )}
+          </section>
+        )}
 
-              <div className="p-4 rounded-lg bg-[var(--green-50)] border border-[var(--green-100)] space-y-1">
-                <span className="text-xs font-semibold text-[var(--green-800)]">Fasting Blood Glucose</span>
-                <p className="text-2xl font-bold tabular-nums text-[var(--text)]">
-                  94 <span className="text-xs font-normal text-[var(--muted)]">mg/dL</span>
-                </p>
-                <p className="text-[11px] text-[var(--muted)]">Observed on 28 Oct 2026 · Within ref range (70-100)</p>
-              </div>
-            </div>
-          </div>
-        </TabPanel>
+        {r.include_appointments && (
+          <section aria-label="Appointments" className="space-y-2">
+            <h2 className="text-sm font-display font-semibold flex items-center gap-2"><Calendar size={15} aria-hidden="true" /> Upcoming appointments</h2>
+            {v.appointments.length === 0 ? (
+              <p className="text-xs text-[var(--muted)]">None recorded.</p>
+            ) : (
+              <Card className="divide-y divide-[var(--border)]">
+                {v.appointments.map((a) => (
+                  <div key={a.id} className="p-3 text-xs">
+                    <span className="font-semibold">{a.doctor_name}</span> · {a.appointment_date ? formatDateTime(a.appointment_date) : ""}
+                    {a.location && <span className="text-[var(--muted)]"> · {a.location}</span>}
+                  </div>
+                ))}
+              </Card>
+            )}
+          </section>
+        )}
 
-        {/* Tab 2: Laboratory Findings */}
-        <TabPanel id="labs" activeTab={activeTab}>
-          <div className="bg-white rounded-xl border border-[var(--border)] shadow-1 overflow-hidden">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-[var(--bg)] text-[var(--muted)] border-b border-[var(--border)]">
-                <tr>
-                  <th className="p-3 font-semibold">Laboratory Test</th>
-                  <th className="p-3 font-semibold">Measured Value</th>
-                  <th className="p-3 font-semibold">Unit</th>
-                  <th className="p-3 font-semibold">Reference Range</th>
-                  <th className="p-3 font-semibold">Report Date</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border)]">
-                <tr>
-                  <td className="p-3 font-medium">Fasting Blood Glucose</td>
-                  <td className="p-3 font-bold tabular-nums text-sm">94</td>
-                  <td className="p-3 text-[var(--muted)]">mg/dL</td>
-                  <td className="p-3 text-[var(--muted)]">70 - 100</td>
-                  <td className="p-3 text-[var(--muted)]">28 Oct 2026</td>
-                </tr>
-                <tr>
-                  <td className="p-3 font-medium">HbA1c Glycated Hemoglobin</td>
-                  <td className="p-3 font-bold tabular-nums text-sm">5.6</td>
-                  <td className="p-3 text-[var(--muted)]">%</td>
-                  <td className="p-3 text-[var(--muted)]">4.0 - 5.7</td>
-                  <td className="p-3 text-[var(--muted)]">28 Oct 2026</td>
-                </tr>
-                <tr>
-                  <td className="p-3 font-medium">Total Serum Cholesterol</td>
-                  <td className="p-3 font-bold tabular-nums text-sm">182</td>
-                  <td className="p-3 text-[var(--muted)]">mg/dL</td>
-                  <td className="p-3 text-[var(--muted)]">125 - 200</td>
-                  <td className="p-3 text-[var(--muted)]">28 Oct 2026</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </TabPanel>
-
-        {/* Tab 3: Prescriptions */}
-        <TabPanel id="meds" activeTab={activeTab}>
-          <div className="space-y-3 bg-white p-6 rounded-xl border border-[var(--border)] shadow-1">
-            <h2 className="text-sm font-display font-semibold text-[var(--text)]">
-              Active Prescribed Medication Regimen
-            </h2>
-            <div className="divide-y divide-[var(--border)] border border-[var(--border)] rounded-lg text-xs">
-              <div className="p-3 flex items-center justify-between">
-                <div>
-                  <span className="font-semibold text-sm">Metformin Hydrochloride</span>
-                  <span className="text-[var(--muted)] ml-2">500 mg</span>
+        {v.documents.length > 0 && (
+          <section aria-label="Reports" className="space-y-2">
+            <h2 className="text-sm font-display font-semibold flex items-center gap-2"><FileText size={15} aria-hidden="true" /> Reports</h2>
+            <Card className="divide-y divide-[var(--border)]">
+              {v.documents.map((d) => (
+                <div key={d.id} className="p-3 text-xs flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold truncate">{d.title}</p>
+                    <p className="text-[var(--muted)]">{d.document_date ? formatDate(d.document_date) : ""}</p>
+                  </div>
+                  <a href={getSharedDocumentDownloadUrl(shareToken, d.id, true)} target="_blank" rel="noopener noreferrer" className="font-semibold text-[var(--green-800)] hover:underline shrink-0">
+                    Open
+                  </a>
                 </div>
-                <span className="text-[var(--muted)]">Twice daily with meals</span>
-              </div>
-              <div className="p-3 flex items-center justify-between">
-                <div>
-                  <span className="font-semibold text-sm">Atorvastatin Calcium</span>
-                  <span className="text-[var(--muted)] ml-2">20 mg</span>
-                </div>
-                <span className="text-[var(--muted)]">Once daily before bed</span>
-              </div>
-            </div>
-          </div>
-        </TabPanel>
+              ))}
+            </Card>
+          </section>
+        )}
       </main>
 
-      {/* Clinician Footer */}
-      <footer className="p-4 border-t border-[var(--border)] text-center text-xs text-[var(--muted)] bg-white">
-        HealthMate AI Clinician View · Read-only access session · Data verified against original clinical documents
+      <footer className="pb-8 text-[11px] text-[var(--muted)] text-center">
+        This information was supplied by the patient from their own records for discussion. HealthMate AI does not diagnose or prescribe. Access to this page is logged.
       </footer>
     </div>
   );
 }
-

@@ -55,7 +55,7 @@ async def quick_reference_general_query(
         logger.exception("General quick reference query failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while retrieving clinical reference: {str(exc)}",
+            detail="The reference lookup is temporarily unavailable. Please try again.",
         )
 
 
@@ -182,7 +182,7 @@ async def quick_reference_profile_records(
         logger.exception("Profile quick reference failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while processing profile records: {str(exc)}",
+            detail="Your records could not be searched right now. Please try again.",
         )
 
 

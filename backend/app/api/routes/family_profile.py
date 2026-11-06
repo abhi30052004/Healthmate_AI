@@ -3,19 +3,26 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.user import User
+from app.core.rate_limit import emergency_card_limiter
 from app.schemas.family_profile import (
+    EmergencyLinkStatus,
+    PublicEmergencyCard,
     FamilyProfileCreate,
     FamilyProfileDeactivateResponse,
     FamilyProfileResponse,
     FamilyProfileUpdate,
 )
 from app.services.family_profile import (
+    disable_emergency_link,
+    enable_emergency_link,
+    get_emergency_link,
+    get_public_emergency_card,
     create_family_profile,
     deactivate_family_profile,
     get_family_profile,
@@ -100,3 +107,51 @@ def deactivate_profile(
 ) -> FamilyProfileDeactivateResponse:
     """Safely archive a family profile while preserving associated medical records for compliance."""
     return deactivate_family_profile(db, current_user, profile_id)
+
+
+@router.get("/{profile_id}/emergency-link", response_model=EmergencyLinkStatus, summary="Is the public emergency card on?")
+def read_emergency_link(
+    profile_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> EmergencyLinkStatus:
+    return get_emergency_link(db, current_user, profile_id)
+
+
+@router.post("/{profile_id}/emergency-link", response_model=EmergencyLinkStatus, summary="Turn on (or rotate) the public emergency card")
+def turn_on_emergency_link(
+    profile_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    rotate: bool = Query(False, description="Issue a new token; previously printed QR codes stop working"),
+) -> EmergencyLinkStatus:
+    return enable_emergency_link(db, current_user, profile_id, rotate=rotate)
+
+
+@router.delete("/{profile_id}/emergency-link", response_model=EmergencyLinkStatus, summary="Turn off the public emergency card")
+def turn_off_emergency_link(
+    profile_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> EmergencyLinkStatus:
+    return disable_emergency_link(db, current_user, profile_id)
+
+
+# Public, unauthenticated: what a first responder reaches by scanning the QR code.
+public_router = APIRouter(prefix="/emergency", tags=["Emergency Card"])
+
+
+@public_router.get(
+    "/{token}",
+    response_model=PublicEmergencyCard,
+    summary="Public emergency card (QR target)",
+    dependencies=[Depends(emergency_card_limiter)],
+)
+def public_emergency_card(
+    token: str,
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+) -> PublicEmergencyCard:
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return get_public_emergency_card(db, token)

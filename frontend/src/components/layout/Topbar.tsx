@@ -1,6 +1,8 @@
-import React, { useState } from "react";
-import { Search, Bell, LogOut, Menu, User, Sparkles, Moon, Sun } from "lucide-react";
+import React from "react";
+import { LogOut, Menu } from "lucide-react";
 import { ProfileSwitcher } from "./ProfileSwitcher";
+import { GlobalSearch } from "./GlobalSearch";
+import { NotificationsMenu } from "./NotificationsMenu";
 import type { FamilyProfile, User as UserType } from "../../api/client";
 
 export interface TopbarProps {
@@ -24,8 +26,6 @@ export function Topbar({
   simpleMode = false,
   onToggleSimpleMode,
 }: TopbarProps) {
-  const [searchQuery, setSearchQuery] = useState("");
-
   return (
     <header className="h-16 bg-white border-b border-[var(--border)] px-4 md:px-6 flex items-center justify-between gap-4 sticky top-0 z-40">
       {/* Left: Mobile Menu Trigger + Profile Switcher */}
@@ -48,20 +48,7 @@ export function Topbar({
 
       {/* Center: Global Search Bar */}
       <div className="hidden md:flex flex-1 max-w-md mx-4">
-        <div className="relative w-full">
-          <Search
-            size={16}
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--muted)] pointer-events-none"
-            aria-hidden="true"
-          />
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search verified records, lab tests, medications..."
-            className="w-full min-h-[38px] pl-9 pr-3 text-xs bg-[var(--bg)] border border-[var(--border)] rounded-lg text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:bg-white focus:border-[var(--green-700)] focus:shadow-[var(--focus)] transition-colors"
-          />
-        </div>
+        <GlobalSearch activeProfile={activeProfile} />
       </div>
 
       {/* Right: Actions, Simple Mode, User */}
@@ -82,14 +69,7 @@ export function Topbar({
         )}
 
         {/* Notifications */}
-        <button
-          type="button"
-          aria-label="Notifications"
-          className="relative p-2 rounded-lg text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--bg)] transition-colors focus-visible:outline-none focus-visible:shadow-[var(--focus)]"
-        >
-          <Bell size={18} />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[var(--green-600)]" />
-        </button>
+        <NotificationsMenu activeProfile={activeProfile} />
 
         {/* User Account / Logout */}
         {onLogout && (

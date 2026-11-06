@@ -1,368 +1,285 @@
 import React, { useState } from "react";
-import { Pill, Plus, Calendar, Clock, Check, AlertCircle, RefreshCw, X, ShieldAlert } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Pill, Plus, Pencil, Trash2, PauseCircle, PlayCircle } from "lucide-react";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { Button } from "../../components/ui/Button";
-import { Card, CardHeader, CardContent } from "../../components/ui/Card";
-import { Input } from "../../components/ui/Input";
+import { Card } from "../../components/ui/Card";
 import { Dialog } from "../../components/ui/Dialog";
 import { Badge } from "../../components/ui/Badge";
-import { DoseCard, type DoseItem } from "../../components/health/DoseCard";
-import type { FamilyProfile } from "../../api/client";
+import { Skeleton } from "../../components/ui/Skeleton";
+import { DoseCard } from "../../components/health/DoseCard";
+import { EmptyState, ErrorState } from "../../components/feedback/States";
+import { profileQueryKeys } from "../../app/queryClient";
+import {
+  deleteMedication,
+  listMedications,
+  updateMedication,
+  type FamilyProfile,
+  type MedicationRecord,
+} from "../../api/client";
+import { errorMessage, formatDate } from "../../lib/dates";
+import { MedicationFormDialog } from "./MedicationFormDialog";
+import { formatClock, useAdherence, useDoses } from "./useDoses";
 
 export interface MedicinesViewProps {
   token: string;
   activeProfile: FamilyProfile | null;
 }
 
-export interface Medication {
-  id: string;
-  name: string;
-  dosage: string;
-  frequency: string;
-  timing: string;
-  instructions: string;
-  refillCount: number;
-  totalRefills: number;
-  startDate: string;
-  status: "active" | "completed" | "paused";
-}
+const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export function MedicinesView({ token, activeProfile }: MedicinesViewProps) {
-  const [activeSubtab, setActiveSubtab] = useState<"today" | "all">("today");
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const profileId = activeProfile?.id ?? "";
+  const [tab, setTab] = useState<"today" | "all">("today");
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<MedicationRecord | null>(null);
+  const [deleting, setDeleting] = useState<MedicationRecord | null>(null);
 
-  // Today's Doses
-  const [doses, setDoses] = useState<DoseItem[]>([
-    {
-      id: "dose-1",
-      name: "Metformin Hydrochloride",
-      dosage: "500 mg",
-      time: "8:00 AM",
-      instructions: "Take with breakfast",
-      status: "pending",
-    },
-    {
-      id: "dose-2",
-      name: "Atorvastatin Calcium",
-      dosage: "20 mg",
-      time: "9:00 PM",
-      instructions: "Take after dinner",
-      status: "pending",
-    },
-    {
-      id: "dose-3",
-      name: "Vitamin D3",
-      dosage: "60,000 IU",
-      time: "10:00 AM",
-      instructions: "Weekly dose",
-      status: "pending",
-    },
-  ]);
+  const medsKey = profileQueryKeys.medicines(profileId);
+  const medsQuery = useQuery({
+    queryKey: medsKey,
+    queryFn: () => listMedications(token, { profile_id: profileId }),
+    enabled: !!profileId,
+  });
+  const doses = useDoses(token, profileId);
+  const adherence = useAdherence(token, profileId, 7);
 
-  // All Prescribed Medications
-  const [medications, setMedications] = useState<Medication[]>([
-    {
-      id: "med-1",
-      name: "Metformin Hydrochloride",
-      dosage: "500 mg",
-      frequency: "Twice daily",
-      timing: "8:00 AM, 8:00 PM",
-      instructions: "Take with meals",
-      refillCount: 18,
-      totalRefills: 30,
-      startDate: "15 Jan 2026",
-      status: "active",
-    },
-    {
-      id: "med-2",
-      name: "Atorvastatin Calcium",
-      dosage: "20 mg",
-      frequency: "Once daily",
-      timing: "9:00 PM",
-      instructions: "Take before bed",
-      refillCount: 24,
-      totalRefills: 30,
-      startDate: "15 Aug 2026",
-      status: "active",
-    },
-    {
-      id: "med-3",
-      name: "Vitamin D3 Cholecalciferol",
-      dosage: "60,000 IU",
-      frequency: "Once weekly",
-      timing: "Sunday mornings",
-      instructions: "Take with milk or meal",
-      refillCount: 4,
-      totalRefills: 8,
-      startDate: "01 Oct 2026",
-      status: "active",
-    },
-  ]);
-
-  // Form state for adding medication
-  const [newMedName, setNewMedName] = useState("");
-  const [newMedDosage, setNewMedDosage] = useState("");
-  const [newMedTime, setNewMedTime] = useState("");
-  const [newMedInstructions, setNewMedInstructions] = useState("");
-
-  const handleTakeDose = (id: string) => {
-    setDoses((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, status: "taken" } : d))
-    );
+  const refreshMeds = () => {
+    queryClient.invalidateQueries({ queryKey: medsKey });
+    queryClient.invalidateQueries({ queryKey: ["doses", profileId] });
+    queryClient.invalidateQueries({ queryKey: ["adherence", profileId] });
+    queryClient.invalidateQueries({ queryKey: ["care-overview", profileId] });
   };
 
-  const handleSkipDose = (id: string) => {
-    setDoses((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, status: "skipped" } : d))
-    );
+  const statusMutation = useMutation({
+    mutationFn: ({ med, status }: { med: MedicationRecord; status: MedicationRecord["status"] }) =>
+      updateMedication(token, med.id, { status }),
+    onSuccess: () => refreshMeds(),
+    onError: (err) => toast.error(errorMessage(err)),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (med: MedicationRecord) => deleteMedication(token, med.id),
+    onSuccess: () => {
+      toast.success("Medication deleted.");
+      setDeleting(null);
+      refreshMeds();
+    },
+    onError: (err) => toast.error(errorMessage(err, "Couldn't delete this medication.")),
+  });
+
+  const medications = medsQuery.data ?? [];
+  const doneToday = doses.items.filter((d) => d.status === "taken").length;
+  const openForm = (med: MedicationRecord | null) => {
+    setEditing(med);
+    setFormOpen(true);
   };
 
-  const handleSnoozeDose = (id: string) => {
-    setDoses((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, status: "snoozed" } : d))
-    );
-  };
-
-  const handleAddMedication = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMedName.trim() || !newMedDosage.trim()) return;
-
-    const newMed: Medication = {
-      id: `med-${Date.now()}`,
-      name: newMedName.trim(),
-      dosage: newMedDosage.trim(),
-      frequency: "Daily",
-      timing: newMedTime || "Morning",
-      instructions: newMedInstructions || "As prescribed",
-      refillCount: 30,
-      totalRefills: 30,
-      startDate: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
-      status: "active",
-    };
-
-    setMedications((prev) => [newMed, ...prev]);
-    setDoses((prev) => [
-      {
-        id: `dose-${Date.now()}`,
-        name: newMed.name,
-        dosage: newMed.dosage,
-        time: newMed.timing,
-        instructions: newMed.instructions,
-        status: "pending",
-      },
-      ...prev,
-    ]);
-
-    setNewMedName("");
-    setNewMedDosage("");
-    setNewMedTime("");
-    setNewMedInstructions("");
-    setIsAddModalOpen(false);
-  };
-
-  const completedTodayCount = doses.filter((d) => d.status === "taken").length;
-  const adherencePercent = Math.round((completedTodayCount / doses.length) * 100);
+  const tabClass = (active: boolean) =>
+    `px-4 py-2 rounded-md text-xs font-semibold transition-colors ${
+      active ? "bg-white text-[var(--green-900)] shadow-1" : "text-[var(--muted)] hover:text-[var(--text)]"
+    }`;
 
   return (
     <div className="space-y-8" data-testid="medicines-view">
       <PageHeader
-        title="Medications & Smart Schedule"
-        subtitle="Manage daily prescribed doses, record confirmations, and monitor refill supplies."
+        title="Medications & Daily Schedule"
+        subtitle={`Keep ${activeProfile?.name ?? "this profile"}'s prescriptions in one place and record each dose as you go.`}
         actions={
-          <Button
-            variant="primary"
-            size="sm"
-            iconLeft={<Plus size={14} />}
-            onClick={() => setIsAddModalOpen(true)}
-          >
-            Add Medication
+          <Button variant="primary" size="sm" iconLeft={<Plus size={14} />} onClick={() => openForm(null)}>
+            Add medication
           </Button>
         }
       />
 
-      {/* Adherence Summary Bar */}
       <section className="p-5 rounded-xl bg-white border border-[var(--border)] shadow-1 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1">
-          <span className="text-xs font-semibold text-[var(--muted)]">Today's Adherence Rate</span>
+          <span className="text-xs font-semibold text-[var(--muted)]">Today</span>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-display font-bold tabular-nums text-[var(--green-900)]">
-              {adherencePercent}%
+              {doneToday}/{doses.items.length}
             </span>
-            <span className="text-xs text-[var(--muted)]">
-              ({completedTodayCount} of {doses.length} doses confirmed)
-            </span>
+            <span className="text-xs text-[var(--muted)]">doses recorded as taken</span>
           </div>
+          {adherence.data && adherence.data.expected > 0 && (
+            <p className="text-xs text-[var(--muted)]" data-testid="adherence-line">
+              Last 7 days: {adherence.data.taken} taken
+              {adherence.data.missed > 0 ? `, ${adherence.data.missed} not recorded` : ""}
+              {adherence.data.taken_percent !== null ? ` (${adherence.data.taken_percent}% of due doses)` : ""}.
+            </p>
+          )}
         </div>
 
-        {/* Subtab Toggle (Today vs All Prescriptions) */}
-        <div className="inline-flex items-center p-1 rounded-lg bg-[var(--bg)] border border-[var(--border)]">
-          <button
-            type="button"
-            onClick={() => setActiveSubtab("today")}
-            className={`px-4 py-2 rounded-md text-xs font-semibold transition-colors ${
-              activeSubtab === "today"
-                ? "bg-white text-[var(--green-900)] shadow-1"
-                : "text-[var(--muted)] hover:text-[var(--text)]"
-            }`}
-          >
-            Today's Schedule ({doses.length})
+        <div role="tablist" aria-label="Medication views" className="inline-flex items-center p-1 rounded-lg bg-[var(--bg)] border border-[var(--border)]">
+          <button type="button" role="tab" aria-selected={tab === "today"} onClick={() => setTab("today")} className={tabClass(tab === "today")}>
+            Today ({doses.items.length})
           </button>
-          <button
-            type="button"
-            onClick={() => setActiveSubtab("all")}
-            className={`px-4 py-2 rounded-md text-xs font-semibold transition-colors ${
-              activeSubtab === "all"
-                ? "bg-white text-[var(--green-900)] shadow-1"
-                : "text-[var(--muted)] hover:text-[var(--text)]"
-            }`}
-          >
-            All Medications ({medications.length})
+          <button type="button" role="tab" aria-selected={tab === "all"} onClick={() => setTab("all")} className={tabClass(tab === "all")}>
+            All medications ({medications.length})
           </button>
         </div>
       </section>
 
-      {/* SUBTAB 1: Today's Schedule */}
-      {activeSubtab === "today" && (
-        <section className="space-y-4">
-          <h2 className="text-sm font-display font-semibold text-[var(--text)]">
-            Scheduled Doses for Today
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {doses.map((dose) => (
-              <DoseCard
-                key={dose.id}
-                dose={dose}
-                onTake={handleTakeDose}
-                onSkip={handleSkipDose}
-                onSnooze={handleSnoozeDose}
-              />
-            ))}
-          </div>
+      {tab === "today" && (
+        <section className="space-y-4" aria-label="Today's doses">
+          {doses.isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[0, 1, 2].map((i) => (
+                <Skeleton key={i} height={120} rounded="lg" />
+              ))}
+            </div>
+          ) : doses.isError ? (
+            <ErrorState title="Couldn't load today's doses" message={errorMessage(doses.error)} onRetry={() => doses.refetch()} />
+          ) : doses.items.length === 0 ? (
+            <EmptyState
+              title="Nothing scheduled today"
+              description={
+                medications.length === 0
+                  ? "Add a medication with dose times and it will show up here every day."
+                  : "No medication has a dose time today. Edit a medication to add times."
+              }
+              actionLabel={medications.length === 0 ? "Add medication" : undefined}
+              onAction={medications.length === 0 ? () => openForm(null) : undefined}
+            />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {doses.items.map((dose) => (
+                <DoseCard
+                  key={dose.id}
+                  dose={dose}
+                  busy={doses.busyId === dose.id}
+                  onTake={doses.take}
+                  onSkip={doses.skip}
+                  onSnooze={doses.snooze}
+                  onUndo={doses.undo}
+                />
+              ))}
+            </div>
+          )}
+          <p className="text-xs text-[var(--muted)]">
+            This records what you tell us. It doesn't confirm a dose was taken and isn't medical advice.
+          </p>
         </section>
       )}
 
-      {/* SUBTAB 2: All Prescribed Medications */}
-      {activeSubtab === "all" && (
-        <section className="space-y-4">
-          <h2 className="text-sm font-display font-semibold text-[var(--text)]">
-            Active Medication Regimen
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {medications.map((med) => {
-              const refillPercent = Math.round((med.refillCount / med.totalRefills) * 100);
-              const isLowStock = med.refillCount <= 5;
-
-              return (
-                <Card key={med.id} className="p-5 flex flex-col justify-between space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2.5">
-                        <div className="p-2 rounded-lg bg-[var(--green-50)] text-[var(--green-800)] border border-[var(--green-100)]">
-                          <Pill size={18} />
+      {tab === "all" && (
+        <section className="space-y-4" aria-label="All medications">
+          {medsQuery.isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[0, 1, 2].map((i) => (
+                <Skeleton key={i} height={170} rounded="lg" />
+              ))}
+            </div>
+          ) : medsQuery.isError ? (
+            <ErrorState title="Couldn't load medications" message={errorMessage(medsQuery.error)} onRetry={() => medsQuery.refetch()} />
+          ) : medications.length === 0 ? (
+            <EmptyState title="No medications yet" description="Add the medicines from a prescription to start a daily schedule." actionLabel="Add medication" onAction={() => openForm(null)} />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {medications.map((med) => {
+                const inactive = med.status !== "active";
+                return (
+                  <Card key={med.id} className={`p-5 flex flex-col justify-between space-y-4 ${inactive ? "opacity-80" : ""}`}>
+                    <div className="space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="p-2 rounded-lg bg-[var(--green-50)] text-[var(--green-800)] border border-[var(--green-100)] shrink-0">
+                            <Pill size={18} aria-hidden="true" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-display font-semibold text-sm truncate">{med.name}</p>
+                            {med.strength && <p className="text-xs text-[var(--muted)] font-mono">{med.strength}</p>}
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-display font-semibold text-sm text-[var(--text)]">
-                            {med.name}
-                          </p>
-                          <p className="text-xs text-[var(--muted)] font-mono">{med.dosage}</p>
-                        </div>
+                        <Badge variant={med.status === "active" ? "verified" : "unverified"} size="sm">
+                          {med.status[0].toUpperCase() + med.status.slice(1)}
+                        </Badge>
                       </div>
-                      <Badge variant={isLowStock ? "review" : "verified"} size="sm">
-                        {isLowStock ? "Low Supply" : "Active"}
-                      </Badge>
+                      <dl className="text-xs text-[var(--muted)] space-y-1 pt-1">
+                        <div>
+                          <dt className="inline font-semibold text-[var(--text)]">Schedule: </dt>
+                          <dd className="inline">
+                            {(med.schedule_times ?? []).length
+                              ? (med.schedule_times ?? []).map(formatClock).join(", ")
+                              : "As needed"}
+                            {(med.schedule_days ?? []).length > 0 && ` · ${(med.schedule_days ?? []).map((d) => DAY_NAMES[d]).join(" ")}`}
+                          </dd>
+                        </div>
+                        {med.dosage_instructions && (
+                          <div>
+                            <dt className="inline font-semibold text-[var(--text)]">Directions: </dt>
+                            <dd className="inline">{med.dosage_instructions}</dd>
+                          </div>
+                        )}
+                        {(med.start_date || med.end_date) && (
+                          <div>
+                            <dt className="inline font-semibold text-[var(--text)]">Period: </dt>
+                            <dd className="inline">
+                              {formatDate(med.start_date)} → {med.end_date ? formatDate(med.end_date) : "ongoing"}
+                            </dd>
+                          </div>
+                        )}
+                        {med.prescriber && (
+                          <div>
+                            <dt className="inline font-semibold text-[var(--text)]">Prescribed by: </dt>
+                            <dd className="inline">{med.prescriber}</dd>
+                          </div>
+                        )}
+                      </dl>
                     </div>
 
-                    <div className="text-xs text-[var(--muted)] space-y-1 pt-1">
-                      <p>
-                        <span className="font-semibold text-[var(--text)]">Frequency:</span> {med.frequency}
-                      </p>
-                      <p>
-                        <span className="font-semibold text-[var(--text)]">Schedule:</span> {med.timing}
-                      </p>
-                      <p>
-                        <span className="font-semibold text-[var(--text)]">Instructions:</span> {med.instructions}
-                      </p>
+                    <div className="pt-3 border-t border-[var(--border)] flex items-center gap-1">
+                      <Button variant="outline" size="sm" iconLeft={<Pencil size={13} />} onClick={() => openForm(med)} className="flex-1 text-xs">
+                        Edit
+                      </Button>
+                      {med.status === "active" ? (
+                        <button type="button" aria-label={`Pause ${med.name}`} title="Pause" onClick={() => statusMutation.mutate({ med, status: "paused" })} className="p-2 rounded-md text-[var(--muted)] hover:text-[var(--green-800)]">
+                          <PauseCircle size={16} />
+                        </button>
+                      ) : (
+                        <button type="button" aria-label={`Resume ${med.name}`} title="Resume" onClick={() => statusMutation.mutate({ med, status: "active" })} className="p-2 rounded-md text-[var(--muted)] hover:text-[var(--green-800)]">
+                          <PlayCircle size={16} />
+                        </button>
+                      )}
+                      <button type="button" aria-label={`Delete ${med.name}`} title="Delete" onClick={() => setDeleting(med)} className="p-2 rounded-md text-[var(--muted)] hover:text-[var(--danger)] hover:bg-[var(--danger-bg)]">
+                        <Trash2 size={16} />
+                      </button>
                     </div>
-                  </div>
-
-                  {/* Refill Meter */}
-                  <div className="pt-3 border-t border-[var(--border)] space-y-1.5">
-                    <div className="flex items-center justify-between text-[11px] text-[var(--muted)]">
-                      <span>Remaining Supply</span>
-                      <span className="font-semibold text-[var(--text)]">
-                        {med.refillCount} of {med.totalRefills} days left
-                      </span>
-                    </div>
-                    <div className="h-1.5 w-full bg-[var(--border)] rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full ${
-                          isLowStock ? "bg-[var(--warning)]" : "bg-[var(--green-600)]"
-                        }`}
-                        style={{ width: `${refillPercent}%` }}
-                      />
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </section>
       )}
 
-      {/* Add Medication Dialog */}
-      <Dialog
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        title="Add Prescribed Medication"
-        description="Enter medication name and dosing directions as stated on your doctor prescription."
-      >
-        <form onSubmit={handleAddMedication} className="space-y-4 pt-2">
-          <Input
-            label="Medication Name"
-            required
-            autoFocus
-            value={newMedName}
-            onChange={(e) => setNewMedName(e.target.value)}
-            placeholder="e.g. Amlodipine Besylate"
-          />
-          <Input
-            label="Strength & Form"
-            required
-            value={newMedDosage}
-            onChange={(e) => setNewMedDosage(e.target.value)}
-            placeholder="e.g. 5 mg Tablet"
-          />
-          <Input
-            label="Schedule Time"
-            value={newMedTime}
-            onChange={(e) => setNewMedTime(e.target.value)}
-            placeholder="e.g. 8:00 AM once daily"
-          />
-          <Input
-            label="Instructions"
-            value={newMedInstructions}
-            onChange={(e) => setNewMedInstructions(e.target.value)}
-            placeholder="e.g. Take with water in morning"
-          />
+      <MedicationFormDialog
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        token={token}
+        profileId={profileId}
+        profileName={activeProfile?.name ?? "this profile"}
+        editing={editing}
+        onSaved={() => {
+          setFormOpen(false);
+          toast.success(editing ? "Medication updated." : "Medication added.");
+          refreshMeds();
+        }}
+      />
 
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-[var(--border)]">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setIsAddModalOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" size="sm">
-              Save Medication
-            </Button>
-          </div>
-        </form>
+      <Dialog open={!!deleting} onClose={() => setDeleting(null)} maxWidth="sm" title="Delete this medication?" description="Its schedule and dose history will be removed. This can't be undone.">
+        <p className="text-sm mb-5">{deleting?.name}</p>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setDeleting(null)}>
+            Cancel
+          </Button>
+          <Button variant="danger" loading={deleteMutation.isPending} onClick={() => deleting && deleteMutation.mutate(deleting)}>
+            Delete
+          </Button>
+        </div>
       </Dialog>
     </div>
   );
 }
-

@@ -1,5 +1,6 @@
 """Service for Family Health Profile management and authorization."""
 
+import secrets
 import uuid
 from datetime import datetime, timezone
 
@@ -13,6 +14,8 @@ from app.models.family_profile import FamilyProfile
 from app.models.reminder import Reminder
 from app.models.user import User
 from app.schemas.family_profile import (
+    EmergencyLinkStatus,
+    PublicEmergencyCard,
     FamilyProfileCreate,
     FamilyProfileDeactivateResponse,
     FamilyProfileResponse,
@@ -144,6 +147,7 @@ def create_family_profile(db: Session, user: User, payload: FamilyProfileCreate)
         emergency_contact_name=payload.emergency_contact_name,
         emergency_contact_phone=payload.emergency_contact_phone,
         allergies_summary=payload.allergies_summary,
+        conditions_summary=payload.conditions_summary,
         avatar_color=avatar_color,
         is_primary=False,
         is_active=True,
@@ -311,3 +315,58 @@ def verify_profile_access(
         )
 
     return profile
+
+
+# ---------------------------------------------------------------- public emergency card
+
+def _owned_profile(db: Session, user: User, profile_id: uuid.UUID) -> FamilyProfile:
+    return verify_profile_access(db, user, profile_id)  # type: ignore[return-value]
+
+
+def get_emergency_link(db: Session, user: User, profile_id: uuid.UUID) -> EmergencyLinkStatus:
+    profile = _owned_profile(db, user, profile_id)
+    return EmergencyLinkStatus(enabled=bool(profile.emergency_token), token=profile.emergency_token)
+
+
+def enable_emergency_link(db: Session, user: User, profile_id: uuid.UUID, rotate: bool = False) -> EmergencyLinkStatus:
+    """Turn the public card on, or issue a new token (which instantly invalidates printed QR codes)."""
+    profile = _owned_profile(db, user, profile_id)
+    if rotate or not profile.emergency_token:
+        profile.emergency_token = secrets.token_urlsafe(32)
+        db.commit()
+        db.refresh(profile)
+    return EmergencyLinkStatus(enabled=True, token=profile.emergency_token)
+
+
+def disable_emergency_link(db: Session, user: User, profile_id: uuid.UUID) -> EmergencyLinkStatus:
+    profile = _owned_profile(db, user, profile_id)
+    profile.emergency_token = None
+    db.commit()
+    return EmergencyLinkStatus(enabled=False, token=None)
+
+
+def get_public_emergency_card(db: Session, token: str) -> PublicEmergencyCard:
+    """Resolve a QR token to the minimal emergency card. Every failure is the same 404."""
+    not_found = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="This emergency card is not available.")
+    if not token or len(token) < 20:
+        raise not_found
+    profile = db.scalars(select(FamilyProfile).where(FamilyProfile.emergency_token == token)).first()
+    if profile is None or not profile.is_active or profile.consent_status == "revoked":
+        raise not_found
+
+    age = None
+    if profile.date_of_birth:
+        today = datetime.now(timezone.utc).date()
+        dob = profile.date_of_birth
+        age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+
+    return PublicEmergencyCard(
+        name=profile.name,
+        age_years=age,
+        blood_type=profile.blood_type,
+        allergies=profile.allergies_summary,
+        conditions=profile.conditions_summary,
+        emergency_contact_name=profile.emergency_contact_name,
+        emergency_contact_phone=profile.emergency_contact_phone,
+        updated_at=profile.updated_at,
+    )

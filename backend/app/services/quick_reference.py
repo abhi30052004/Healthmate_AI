@@ -33,6 +33,7 @@ from app.schemas.quick_reference import (
     SourceItem,
 )
 from app.services.ai_quota import check_and_increment_quota, get_user_ai_usage
+from app.services.llm import complete as llm_complete, llm_provider_name, resolve_llm_target
 from app.services.quick_reference_cache import (
     compute_general_cache_key,
     compute_profile_cache_key,
@@ -146,19 +147,13 @@ def sanitize_generated_answer(answer: str, ground_values: list[str]) -> str:
     return sanitized
 
 
-async def maybe_simplify_with_openai(
+async def maybe_simplify_with_llm(
     prompt: str,
     system_instruction: str,
     user_id: str,
 ) -> tuple[str | None, bool]:
-    """Optionally simplify explanation using OpenAI if configured and within budget."""
-    settings = get_settings()
-
-    if not settings.ai_enabled or settings.llm_provider.lower() != "openai":
-        return None, False
-
-    api_key = settings.openai_api_key or os.getenv("OPENAI_API_KEY")
-    if not api_key:
+    """Optionally simplify an explanation with the configured LLM (Groq/OpenAI)."""
+    if resolve_llm_target() is None:
         return None, False
 
     # Check and debit quota
@@ -166,32 +161,10 @@ async def maybe_simplify_with_openai(
         logger.info("AI Quick Reference daily quota exhausted for user %s", user_id)
         return None, False
 
-    try:
-        async with httpx.AsyncClient(timeout=float(settings.ai_request_timeout_seconds)) as client:
-            res = await client.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": settings.openai_model,
-                    "messages": [
-                        {"role": "system", "content": system_instruction},
-                        {"role": "user", "content": prompt},
-                    ],
-                    "temperature": 0.1,
-                    "max_tokens": settings.ai_max_output_tokens,
-                },
-            )
-            if res.status_code == 200:
-                data = res.json()
-                content = data["choices"][0]["message"]["content"]
-                return content.strip(), True
-    except Exception as exc:
-        logger.warning("OpenAI Quick Reference call failed: %s; using deterministic fallback", exc)
-
-    return None, False
+    text = await llm_complete(system_instruction, prompt, temperature=0.1)
+    if not text:
+        return None, False
+    return text, True
 
 
 async def handle_general_quick_reference(
@@ -322,7 +295,7 @@ async def handle_general_quick_reference(
         "Provide a clear, respectful, plain-language patient summary:"
     )
 
-    simplified, did_generate = await maybe_simplify_with_openai(
+    simplified, did_generate = await maybe_simplify_with_llm(
         prompt=prompt_text,
         system_instruction=system_inst,
         user_id=str(user.id),
@@ -330,7 +303,7 @@ async def handle_general_quick_reference(
     if did_generate and simplified:
         chosen_answer = sanitize_generated_answer(simplified, [])
         gen_used = True
-        provider_name = "openai"
+        provider_name = llm_provider_name() or "llm"
 
     resp = QuickReferenceResponse(
         mode=request.mode,
@@ -587,7 +560,7 @@ async def handle_profile_quick_reference(
         "Format a clear patient summary:"
     )
 
-    simplified, did_generate = await maybe_simplify_with_openai(
+    simplified, did_generate = await maybe_simplify_with_llm(
         prompt=prompt_text,
         system_instruction=system_inst,
         user_id=str(user.id),
@@ -598,7 +571,7 @@ async def handle_profile_quick_reference(
         if all_preserved:
             ans_text = sanitize_generated_answer(simplified, ground_values)
             gen_used = True
-            provider_name = "openai"
+            provider_name = llm_provider_name() or "llm"
 
     resp = QuickReferenceResponse(
         mode=mode,

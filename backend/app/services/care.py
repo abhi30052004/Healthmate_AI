@@ -125,6 +125,8 @@ def create_medication(
         dosage_instructions=data.dosage_instructions,
         route=data.route,
         frequency=data.frequency,
+        schedule_times=data.schedule_times,
+        schedule_days=data.schedule_days,
         start_date=data.start_date,
         end_date=data.end_date,
         prescriber=data.prescriber,

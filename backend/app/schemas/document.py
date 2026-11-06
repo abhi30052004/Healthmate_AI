@@ -1,7 +1,8 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime, time, timedelta
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ObservationBase(BaseModel):
@@ -88,3 +89,38 @@ class DocumentVerifyResponse(BaseModel):
     verified_at: datetime
     observations_verified_count: int = 0
     message: str = "Extracted document content confirmed by user."
+
+
+class ObservationCreate(BaseModel):
+    """A single user-entered result (manual entry, or a row the extractor missed)."""
+
+    test_name: str = Field(min_length=1, max_length=255)
+    value: str = Field(min_length=1, max_length=100)
+    unit: str | None = Field(default=None, max_length=50)
+    reference_range: str | None = Field(default=None, max_length=100)
+
+    @field_validator("test_name", "value")
+    @classmethod
+    def _not_blank(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("must not be blank")
+        return v
+
+
+class ManualEntryCreate(BaseModel):
+    """Manual lab / vital entry. Becomes a verified, file-less record in the profile."""
+
+    profile_id: uuid.UUID | None = None
+    entry_type: Literal["lab", "vital", "other"] = "lab"
+    entry_date: date
+    entry_time: time | None = None
+    source_label: str | None = Field(default=None, max_length=255)
+    observations: list[ObservationCreate] = Field(min_length=1, max_length=50)
+
+    @field_validator("entry_date")
+    @classmethod
+    def _not_in_future(cls, v: date) -> date:
+        if v > date.today() + timedelta(days=1):
+            raise ValueError("entry_date cannot be in the future")
+        return v

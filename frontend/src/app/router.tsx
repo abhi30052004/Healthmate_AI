@@ -4,8 +4,11 @@ import { PageLoader } from "../components/feedback/PageLoader";
 import { LandingPageView } from "../features/landing/LandingPageView";
 import { LoginPage } from "../features/auth/LoginPage";
 import { RegisterPage } from "../features/auth/RegisterPage";
+import { ForgotPasswordPage, ResetPasswordPage } from "../features/auth/PasswordResetPages";
+import { PublicEmergencyCardPage } from "../features/sharing/PublicEmergencyCardPage";
 import { PublicDoctorPortalPage } from "../features/sharing/PublicDoctorPortalPage";
 import { NotFoundPage } from "../features/notfound/NotFoundPage";
+import { ProtectedRoute, PublicOnlyRoute } from "./ProtectedRoute";
 
 // Lazy-loaded workspace layout and views
 const AppLayout = lazy(() => import("./AppLayout"));
@@ -70,26 +73,41 @@ export const routes: RouteObject[] = [
   },
   {
     path: "/login",
-    element: <LoginPage />,
+    element: (
+      <PublicOnlyRoute>
+        <LoginPage />
+      </PublicOnlyRoute>
+    ),
   },
   {
     path: "/register",
-    element: <RegisterPage />,
+    element: (
+      <PublicOnlyRoute>
+        <RegisterPage />
+      </PublicOnlyRoute>
+    ),
   },
+  { path: "/forgot-password", element: <ForgotPasswordPage /> },
+  // Not wrapped in PublicOnlyRoute: a signed-in user may still follow an emailed reset link.
+  { path: "/reset-password", element: <ResetPasswordPage /> },
+  { path: "/e/:token", element: <PublicEmergencyCardPage /> },
   {
     path: "/s/:token",
     element: <PublicDoctorPortalPage />,
   },
   {
-    path: "/doctor-share",
+    // Same portal; older links were issued under /shared/:token
+    path: "/shared/:token",
     element: <PublicDoctorPortalPage />,
   },
   {
     path: "/app",
     element: (
-      <SuspenseWrapper>
-        <AppLayout />
-      </SuspenseWrapper>
+      <ProtectedRoute>
+        <SuspenseWrapper>
+          <AppLayout />
+        </SuspenseWrapper>
+      </ProtectedRoute>
     ),
     children: [
       { index: true, element: <Navigate to="dashboard" replace /> },

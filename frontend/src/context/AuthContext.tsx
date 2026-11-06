@@ -1,7 +1,9 @@
 import React, {
   createContext,
+  useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -10,9 +12,13 @@ import {
   tokenStorage,
   ApiError,
   type LoginRequest,
+  type LoginResponse,
   type RegisterRequest,
   type User,
 } from "../services/authService";
+
+/** Window event dispatched by the query layer whenever the API answers 401. */
+export const SESSION_EXPIRED_EVENT = "healthmate:session-expired";
 
 export interface AuthContextType {
   user: User | null;
@@ -21,6 +27,8 @@ export interface AuthContextType {
   isInitializing: boolean;
   sessionError: string | null;
   login: (credentials: LoginRequest) => Promise<User>;
+  /** Adopt a login response obtained elsewhere (e.g. by the login form). */
+  setSession: (res: LoginResponse) => Promise<User>;
   register: (payload: RegisterRequest) => Promise<User>;
   logout: () => void;
   handleSessionExpired: (customMessage?: string) => void;
@@ -28,6 +36,9 @@ export interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+/** Renew the token once 75% of its lifetime has elapsed (only while the tab is open). */
+const REFRESH_AT_FRACTION = 0.75;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
@@ -37,6 +48,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return typeof window !== "undefined" && !!tokenStorage.get();
   });
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const [expiresInSec, setExpiresInSec] = useState<number>(15 * 60);
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearSession = useCallback((message: string | null) => {
+    tokenStorage.clear();
+    setToken(null);
+    setUser(null);
+    setSessionError(message);
+  }, []);
 
   // Restore authenticated session on initial mount without flash of unauthenticated UI
   useEffect(() => {
@@ -78,27 +98,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Sliding renewal: keep an active session alive; an expired/revoked one ends cleanly.
+  useEffect(() => {
+    if (!token) return undefined;
+    refreshTimer.current = setTimeout(
+      async () => {
+        try {
+          const res = await authService.refresh(token);
+          tokenStorage.set(res.access_token);
+          setExpiresInSec(res.expires_in);
+          setToken(res.access_token);
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 401) {
+            clearSession("Your session has expired. Please sign in again.");
+          }
+        }
+      },
+      Math.max(30, expiresInSec * REFRESH_AT_FRACTION) * 1000
+    );
+    return () => {
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    };
+  }, [token, expiresInSec, clearSession]);
+
+  // Any API 401 (from queries or mutations) ends the session.
+  useEffect(() => {
+    const onExpired = () => clearSession("Your session has expired. Please sign in again.");
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
+  }, [clearSession]);
+
+  const setSession = useCallback(async (res: LoginResponse): Promise<User> => {
+    tokenStorage.set(res.access_token);
+    setExpiresInSec(res.expires_in);
+    setToken(res.access_token);
+    setSessionError(null);
+    const fullProfile = await authService.getMe(res.access_token);
+    setUser(fullProfile);
+    return fullProfile;
+  }, []);
+
   const login = async (credentials: LoginRequest): Promise<User> => {
     setIsLoading(true);
     setSessionError(null);
     try {
-      // Step 1: POST /api/auth/login
       const loginRes = await authService.login(credentials);
-      const accessToken = loginRes.access_token;
-
-      // Step 2: Store in sessionStorage (per-tab safe persistence)
-      tokenStorage.set(accessToken);
-      setToken(accessToken);
-
-      // Step 3: GET /api/auth/me to retrieve full authenticated profile
-      const fullProfile = await authService.getMe(accessToken);
-      setUser(fullProfile);
-
-      return fullProfile;
+      return await setSession(loginRes);
     } catch (err) {
-      tokenStorage.clear();
-      setToken(null);
-      setUser(null);
+      clearSession(null);
       throw err;
     } finally {
       setIsLoading(false);
@@ -108,32 +155,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = async (payload: RegisterRequest): Promise<User> => {
     setIsLoading(true);
     try {
-      const newUser = await authService.register(payload);
-      return newUser;
+      return await authService.register(payload);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const logout = () => {
-    tokenStorage.clear();
-    setToken(null);
-    setUser(null);
-    setSessionError(null);
-  };
+  const logout = () => clearSession(null);
 
   const handleSessionExpired = (
     customMessage: string = "Your session has expired. Please sign in again."
-  ) => {
-    tokenStorage.clear();
-    setToken(null);
-    setUser(null);
-    setSessionError(customMessage);
-  };
+  ) => clearSession(customMessage);
 
-  const clearSessionError = () => {
-    setSessionError(null);
-  };
+  const clearSessionError = () => setSessionError(null);
 
   return (
     <AuthContext.Provider
@@ -144,6 +178,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isInitializing,
         sessionError,
         login,
+        setSession,
         register,
         logout,
         handleSessionExpired,
@@ -153,6 +188,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
+}
+
+/** Like useAuth but returns undefined outside an AuthProvider (for shared UI used in tests/previews). */
+export function useOptionalAuth(): AuthContextType | undefined {
+  return useContext(AuthContext);
 }
 
 export function useAuth(): AuthContextType {

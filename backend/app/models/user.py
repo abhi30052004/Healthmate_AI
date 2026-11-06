@@ -56,6 +56,8 @@ class User(Base):
     doctor_sharing_sessions = relationship("DoctorSharingSession", back_populates="owner", cascade="all, delete-orphan")
     duplicate_candidates = relationship("DuplicateCandidate", back_populates="user", cascade="all, delete-orphan")
     data_quality_audit_logs = relationship("DataQualityAuditLog", back_populates="user", cascade="all, delete-orphan")
+    dose_logs = relationship("DoseLog", cascade="all, delete-orphan")
+    symptom_entries = relationship("SymptomEntry", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, email='{self.email}')>"

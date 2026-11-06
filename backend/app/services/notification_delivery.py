@@ -21,6 +21,7 @@ def send_email_notification(
     subject: str,
     body_text: str,
     user_is_verified: bool = True,
+    include_reminder_footer: bool = True,
 ) -> DeliveryResult:
     """Safely deliver an email notification if SMTP is configured.
     
@@ -64,7 +65,7 @@ def send_email_notification(
             "It does not constitute medical advice or confirmation that medication was administered. "
             "Please log in to HealthMate AI to manage your care reminders."
         )
-        msg.set_content(body_text + footer)
+        msg.set_content(body_text + footer if include_reminder_footer else body_text)
 
         if settings.smtp_use_tls:
             with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as server:

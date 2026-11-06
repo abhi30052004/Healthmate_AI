@@ -20,19 +20,33 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 15
 
+    # Public URL of the web app, used in emailed links (password reset).
+    # Falls back to the first allowed CORS origin when unset.
+    frontend_base_url: str = ""
+    password_reset_expire_minutes: int = 30
+
     document_storage_dir: str = "./private_uploads"
     max_upload_size_bytes: int = 10 * 1024 * 1024  # 10 MB
 
     # AI Configuration (Quick Reference & Medical Chat)
     ai_enabled: bool = True
-    llm_provider: str = "openai"
+    # "auto" picks Groq, then OpenAI, depending on which API key is configured.
+    # "groq" / "openai" force a provider; "none" / "fallback" disable external LLMs.
+    llm_provider: str = "auto"
+    groq_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("groq_api_key", "grok_api", "groq_api"),
+    )
+    groq_model: str = "openai/gpt-oss-120b"
+    groq_base_url: str = "https://api.groq.com/openai/v1"
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"
     ai_daily_chat_limit: int = 20
     ai_daily_quick_reference_limit: int = 20
     ai_monthly_budget_usd: float = 5.0
-    ai_request_timeout_seconds: int = 20
-    ai_max_output_tokens: int = 500
+    ai_request_timeout_seconds: int = 30
+    # Reasoning models (gpt-oss) spend part of this budget on hidden reasoning tokens.
+    ai_max_output_tokens: int = 1200
 
     # Optional Email Notification Settings
     smtp_host: str | None = None
@@ -45,6 +59,11 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.frontend_origins.split(",") if o.strip()]
+
+    @property
+    def web_base_url(self) -> str:
+        base = self.frontend_base_url.strip() or (self.cors_origins[0] if self.cors_origins else "")
+        return base.rstrip("/")
 
     @model_validator(mode="after")
     def validate_production_security(self) -> "Settings":

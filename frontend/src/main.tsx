@@ -6,6 +6,8 @@ import { router } from "./app/router";
 import { queryClient } from "./app/queryClient";
 import { ErrorBoundary } from "./app/ErrorBoundary";
 import { I18nProvider } from "./i18n/i18nContext";
+import { Toaster } from "sonner";
+import { AuthProvider } from "./context/AuthContext";
 import "./styles/tokens.css";
 import "./index.css";
 import "./styles/globals.css";
@@ -15,9 +17,12 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <I18nProvider initialLanguage="en">
-          <RouterProvider router={router} />
-        </I18nProvider>
+        <AuthProvider>
+          <I18nProvider initialLanguage="en">
+            <RouterProvider router={router} />
+            <Toaster position="top-right" richColors closeButton />
+          </I18nProvider>
+        </AuthProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   </React.StrictMode>
