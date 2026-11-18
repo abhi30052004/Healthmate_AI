@@ -39,3 +39,6 @@ test-results/
 frontend/test-results/
 .DS_Store
 Thumbs.db
+
+# Documentation (local only)
+HealthMate_AI_Docs_v4/
