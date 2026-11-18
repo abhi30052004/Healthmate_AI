@@ -14,7 +14,6 @@ FastAPI asynchronous backend for HealthMate AI. Provides medical document ingest
 - **Document Processing:** [PyMuPDF](https://pymupdf.readthedocs.io/) (`fitz`), [RapidOCR](https://github.com/RapidAI/RapidOCR) (ONNX runtime), [Pytesseract](https://pypi.org/project/pytesseract/), [Pillow](https://pillow.readthedocs.io/)
 - **PDF Generation:** [ReportLab](https://www.reportlab.com/)
 - **Security:** Argon2 password hashing (`pwdlib[argon2]`), PyJWT stateless bearer authentication
-- **Testing:** Pytest, HTTPX, AnyIO
 
 ---
 
@@ -104,10 +103,8 @@ backend/
 │       ├── medical_insights.py   # Trend deltas & longitudinal changes
 │       ├── visit_pack.py         # Consolidated visit pack generation & PDF export
 │       └── reminder.py           # Medication reminder dispatching
-├── tests/                        # Pytest automated test suites
-├── requirements.txt              # Production and development dependencies
+├── requirements.txt              # Production dependencies
 ├── alembic.ini                   # Alembic configuration file
-├── pytest.ini                    # Pytest configuration
 └── README.md                     # This file
 ```
 
@@ -262,22 +259,7 @@ When modifying SQLAlchemy models in `app/models/`:
 
 ---
 
-## 8. Running Tests
-
-```powershell
-# Run all tests
-python -m pytest
-
-# Run with verbose output
-python -m pytest -v
-
-# Run a specific test module
-python -m pytest tests/test_auth.py
-```
-
----
-
-## 9. Production Deployment Guidelines
+## 8. Production Deployment Guidelines
 
 1. **Production Server:** Run behind Gunicorn with Uvicorn worker processes:
    ```bash

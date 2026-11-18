@@ -6,7 +6,6 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4.19-38B2AC.svg?style=flat&logo=Tailwind-CSS&logoColor=white)](https://tailwindcss.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16+-336791.svg?style=flat&logo=PostgreSQL&logoColor=white)](https://www.postgresql.org/)
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB.svg?style=flat&logo=Python&logoColor=white)](https://www.python.org/)
-[![Vitest](https://img.shields.io/badge/Vitest-Passed_167_Tests-6E9F18.svg?style=flat&logo=Vitest&logoColor=white)](https://vitest.dev/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 > **Carry your health, not your paperwork.**  
@@ -127,7 +126,6 @@ Healthmate_AI/
 │   │   ├── schemas/               # Pydantic validation schemas
 │   │   └── services/              # Document extraction, RAG, medications, audit services
 │   ├── alembic/                   # Database migrations
-│   ├── tests/                     # Pytest automated test suites
 │   ├── requirements.txt           # Python dependencies
 │   ├── .env.example               # Backend environment template
 │   └── README.md                  # Backend developer documentation
@@ -151,10 +149,8 @@ Healthmate_AI/
 │   ├── ARCHITECTURE.md            # System architecture & deployment topology
 │   ├── API.md                     # REST API conventions & payload specs
 │   ├── DATABASE.md                # ER diagrams & schema lifecycle
-│   ├── SECURITY.md                # Threat modeling & security controls
-│   └── TESTING.md                 # Test plan & quality guidelines
+│   └── SECURITY.md                # Threat modeling & security controls
 │
-├── fixtures/                      # Synthetic medical test reports (CBC, Lipid, Prescriptions)
 ├── .gitignore                     # Root git ignore
 └── README.md                      # Project master documentation (this file)
 ```
@@ -244,27 +240,6 @@ Healthmate_AI/
    npm run dev
    ```
    Open your browser at `http://localhost:5173`.
-
----
-
-## 🧪 Testing
-
-### Frontend Test Suite (Vitest)
-HealthMate AI includes 167 automated unit and integration tests covering all features, auth flows, date handling, and responsive navigation:
-```bash
-cd frontend
-npm test
-```
-To run tests with UI coverage in watch mode:
-```bash
-npx vitest
-```
-
-### Backend Test Suite (Pytest)
-```bash
-cd backend
-python -m pytest
-```
 
 ---
 
