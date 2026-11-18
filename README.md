@@ -268,6 +268,17 @@ python -m pytest
 
 ---
 
+## 🌐 Production Deployment (Vercel & Render)
+
+HealthMate AI is pre-configured for production deployment:
+- **Frontend on Vercel:** Automated SPA routing via [`frontend/vercel.json`](frontend/vercel.json) and root [`vercel.json`](vercel.json).
+- **Backend on Render:** Automated deployment via [`render.yaml`](render.yaml), [`backend/Dockerfile`](backend/Dockerfile), and [`backend/start.sh`](backend/start.sh).
+- **Database on Neon:** Managed PostgreSQL 16 with the `pgvector` extension.
+
+For complete step-by-step instructions with environment variable mappings and CORS configuration, see **[DEPLOY_GUIDE.md](DEPLOY_GUIDE.md)**.
+
+---
+
 ## 🛡️ Security & Privacy Guardrails
 
 1. **Row-Level Profile Scoping:** Every health record, observation, symptom, and reminder query enforces explicit `profile_id` and `user_id` validation. Users cannot query records from another account.

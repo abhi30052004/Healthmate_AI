@@ -1,0 +1,46 @@
+services:
+  # ---------------------------------------------------------------------------
+  # HealthMate AI — FastAPI Backend Service (Render Web Service)
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: healthmate-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt && alembic upgrade head
+    startCommand: ./start.sh
+    plan: free
+    healthCheckPath: /health/live
+    envVars:
+      - key: APP_NAME
+        value: HealthMate AI
+      - key: APP_ENV
+        value: production
+      - key: API_PREFIX
+        value: /api
+      # Managed PostgreSQL Database URL (e.g. Neon, Supabase, or Render Postgres)
+      - key: DATABASE_URL
+        sync: false
+      # Auto-generates a high-entropy secret on Render
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "15"
+      # Comma-separated Vercel frontend URL(s)
+      - key: FRONTEND_ORIGINS
+        sync: false
+      - key: FRONTEND_BASE_URL
+        sync: false
+      - key: DOCUMENT_STORAGE_DIR
+        value: /tmp/uploads
+      - key: LLM_PROVIDER
+        value: auto
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
+      - key: AI_DAILY_CHAT_LIMIT
+        value: "20"
+      - key: AI_DAILY_QUICK_REFERENCE_LIMIT
+        value: "20"
