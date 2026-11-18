@@ -23,7 +23,7 @@ export function PageHeader({
         {subtitle && <p className="text-xs md:text-sm text-[var(--muted)] max-w-2xl">{subtitle}</p>}
       </div>
 
-      {actions && <div className="flex items-center gap-3 shrink-0">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 shrink-0">{actions}</div>}
     </div>
   );
 }

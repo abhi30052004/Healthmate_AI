@@ -141,4 +141,15 @@ describe("AppointmentsView (real data)", () => {
     renderWithProviders(<AppointmentsView token="t" activeProfile={testProfile} />);
     expect(await screen.findByText("No upcoming appointments")).toBeDefined();
   });
+
+  it("opens the printable appointment slip dialog when clicking Print slip", async () => {
+    renderWithProviders(<AppointmentsView token="t" activeProfile={testProfile} />);
+    const printBtn = await screen.findByRole("button", { name: /Print slip for Diabetes check-up/i });
+    fireEvent.click(printBtn);
+    const dlg = await screen.findByRole("dialog");
+    expect(dlg).toBeDefined();
+    expect(within(dlg).getAllByText("Doctor Appointment Slip").length).toBeGreaterThan(0);
+    expect(within(dlg).getByText("Dr. Mukherjee")).toBeDefined();
+    expect(within(dlg).getByText("Bring recent lab reports")).toBeDefined();
+  });
 });

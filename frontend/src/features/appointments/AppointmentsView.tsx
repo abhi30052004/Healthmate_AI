@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Calendar, Plus, Clock, MapPin, CheckSquare, Square, FileText, Pencil, Trash2, X } from "lucide-react";
+import { Calendar, Plus, Clock, MapPin, CheckSquare, Square, FileText, Pencil, Trash2, X, Printer } from "lucide-react";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
@@ -25,18 +25,25 @@ import {
 } from "../../api/client";
 import { errorMessage, formatDate, formatTime, toDateInput } from "../../lib/dates";
 import { AppointmentFormDialog } from "./AppointmentFormDialog";
+import { AppointmentSlipDialog } from "./AppointmentSlipDialog";
 
 const QUICK_ITEMS = ["Bring recent lab reports", "Bring current medication list", "Write down questions"];
+
+export interface AppointmentsViewProps {
+  token: string;
+  activeProfile: FamilyProfile | null;
+  onPrepareVisitPack?: (appointmentInfo?: {
+    title?: string;
+    provider_name?: string | null;
+    questions?: string[];
+  }) => void;
+}
 
 export function AppointmentsView({
   token,
   activeProfile,
   onPrepareVisitPack,
-}: {
-  token: string;
-  activeProfile: FamilyProfile | null;
-  onPrepareVisitPack?: () => void;
-}) {
+}: AppointmentsViewProps) {
   const queryClient = useQueryClient();
   const profileId = activeProfile?.id ?? "";
   const key = profileQueryKeys.appointments(profileId);
@@ -47,6 +54,7 @@ export function AppointmentsView({
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<AppointmentRecord | null>(null);
   const [deleting, setDeleting] = useState<AppointmentRecord | null>(null);
+  const [printingAppt, setPrintingAppt] = useState<AppointmentRecord | null>(null);
   const [newItem, setNewItem] = useState<Record<string, string>>({});
 
   const apptQuery = useQuery({
@@ -142,15 +150,17 @@ export function AppointmentsView({
 
   return (
     <div className="space-y-8" data-testid="appointments-view">
-      <PageHeader
-        title="Appointments & Visit Prep"
-        subtitle={`Plan ${activeProfile?.name ?? "this profile"}'s visits, tick off what to bring, and prepare a visit pack.`}
-        actions={
-          <Button variant="primary" size="sm" iconLeft={<Plus size={14} />} onClick={() => { setEditing(null); setFormOpen(true); }}>
-            Add appointment
-          </Button>
-        }
-      />
+      <div className="print:hidden">
+        <PageHeader
+          title="Appointments & Visit Prep"
+          subtitle={`Plan ${activeProfile?.name ?? "this profile"}'s visits, tick off what to bring, and prepare a visit pack.`}
+          actions={
+            <Button variant="primary" size="sm" iconLeft={<Plus size={14} />} onClick={() => { setEditing(null); setFormOpen(true); }}>
+              Add appointment
+            </Button>
+          }
+        />
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="p-5 lg:col-span-1 self-start">
@@ -296,6 +306,16 @@ export function AppointmentsView({
                           Reopen
                         </Button>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs"
+                        iconLeft={<Printer size={13} />}
+                        onClick={() => setPrintingAppt(a)}
+                        aria-label={`Print slip for ${a.title}`}
+                      >
+                        Print slip
+                      </Button>
                       <span className="flex-1" />
                       <button type="button" aria-label={`Edit ${a.title}`} onClick={() => { setEditing(a); setFormOpen(true); }} className="p-2 rounded-md text-[var(--muted)] hover:text-[var(--green-800)]">
                         <Pencil size={15} />
@@ -305,7 +325,19 @@ export function AppointmentsView({
                       </button>
                     </div>
                     {onPrepareVisitPack && a.status === "scheduled" && (
-                      <Button variant="outline" size="sm" onClick={onPrepareVisitPack} iconLeft={<FileText size={14} />} className="w-full text-xs">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          onPrepareVisitPack({
+                            title: a.title,
+                            provider_name: a.provider_name,
+                            questions: tasks.map((t) => t.title),
+                          })
+                        }
+                        iconLeft={<FileText size={14} />}
+                        className="w-full text-xs"
+                      >
                         Prepare visit pack
                       </Button>
                     )}
@@ -330,6 +362,14 @@ export function AppointmentsView({
           setMonth(new Date(a.scheduled_at));
           refresh();
         }}
+      />
+
+      <AppointmentSlipDialog
+        open={!!printingAppt}
+        onClose={() => setPrintingAppt(null)}
+        appointment={printingAppt}
+        tasks={printingAppt ? tasksByAppt[printingAppt.id] ?? [] : []}
+        patientName={activeProfile?.name ?? "Patient"}
       />
 
       <Dialog open={!!deleting} onClose={() => setDeleting(null)} maxWidth="sm" title="Delete this appointment?" description="Its checklist items will be unlinked. This can't be undone.">

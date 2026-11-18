@@ -154,7 +154,7 @@ export function AuthLayout({
       </aside>
 
       {/* Form side */}
-      <main className="relative flex flex-1 flex-col items-center justify-center overflow-hidden px-4 py-10 sm:px-8">
+      <main className="relative flex flex-1 flex-col items-center justify-center overflow-y-auto overflow-x-hidden px-4 py-8 sm:py-10 sm:px-8">
         <div aria-hidden className="lp-dots absolute inset-0 opacity-50 [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]" />
         <div aria-hidden className="lp-aurora absolute -right-24 -top-24 h-[360px] w-[360px] rounded-full bg-[radial-gradient(circle,rgba(67,181,143,0.35),transparent_65%)] blur-2xl lg:hidden" />
 

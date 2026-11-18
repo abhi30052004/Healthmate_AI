@@ -164,11 +164,15 @@ export async function uploadDocument(
     formData.append("profile_id", profileId);
   }
 
+  const uploadUrl = profileId
+    ? `${BASE}/api/documents?profile_id=${encodeURIComponent(profileId)}`
+    : `${BASE}/api/documents`;
+
   // If XMLHttpRequest is available (browser), use it for real upload progress
   if (typeof XMLHttpRequest !== "undefined" && onProgress) {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.open("POST", `${BASE}/api/documents`);
+      xhr.open("POST", uploadUrl);
       xhr.setRequestHeader("Authorization", `Bearer ${token}`);
 
       if (xhr.upload) {
@@ -219,7 +223,7 @@ export async function uploadDocument(
   }
 
   // Standard fetch implementation
-  const res = await fetch(`${BASE}/api/documents`, {
+  const res = await fetch(uploadUrl, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -406,6 +410,28 @@ export async function deleteDocument(token: string, id: string): Promise<void> {
     const message = await parseErrorMessage(res);
     throw new ApiError(res.status, message);
   }
+}
+
+export async function updateDocumentProfile(
+  token: string,
+  id: string,
+  profileId: string | null
+): Promise<DocumentItem> {
+  const res = await fetch(`${BASE}/api/documents/${id}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ profile_id: profileId }),
+  });
+
+  if (!res.ok) {
+    const message = await parseErrorMessage(res);
+    throw new ApiError(res.status, message);
+  }
+
+  return res.json();
 }
 
 // ---------------------------------------------------------------------------

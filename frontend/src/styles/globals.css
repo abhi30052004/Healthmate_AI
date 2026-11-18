@@ -114,5 +114,18 @@
   .text-tabular {
     font-variant-numeric: tabular-nums;
   }
+
+  /* Mobile safe-area insets */
+  .pb-safe {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0.5rem));
+  }
+
+  .pt-safe {
+    padding-top: max(0.5rem, env(safe-area-inset-top, 0.5rem));
+  }
+
+  .min-h-screen-safe {
+    min-height: calc(100vh - env(safe-area-inset-bottom, 0px) - env(safe-area-inset-top, 0px));
+  }
 }
 

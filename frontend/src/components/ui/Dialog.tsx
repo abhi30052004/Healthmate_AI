@@ -83,7 +83,7 @@ export function Dialog({
             aria-modal="true"
             aria-labelledby={title ? "dialog-title" : undefined}
             aria-describedby={description ? "dialog-desc" : undefined}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4"
           >
             {/* Backdrop */}
             <motion.div
@@ -108,7 +108,7 @@ export function Dialog({
               {title ? (
                 <>
                   {/* Default Header */}
-                  <div className="flex items-start justify-between p-5 border-b border-[var(--border)]">
+                  <div className="flex items-start justify-between p-4 sm:p-5 border-b border-[var(--border)]">
                     <div>
                       <h2 id="dialog-title" className="text-lg font-display font-semibold text-[var(--text)]">
                         {title}
@@ -129,7 +129,7 @@ export function Dialog({
                     </button>
                   </div>
                   {/* Content */}
-                  <div className="p-6 max-h-[80vh] overflow-y-auto">{children}</div>
+                  <div className="p-4 sm:p-6 max-h-[82vh] overflow-y-auto">{children}</div>
                 </>
               ) : (
                 children

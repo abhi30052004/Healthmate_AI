@@ -425,7 +425,13 @@ def export_visit_pack_pdf(
         export_profile = verify_profile_access(db, user, p_uuid)
 
     # Strict Authorization Validation: Verify that all referenced IDs belong to user (and profile if specified)
-    doc_ids_to_check = [uuid.UUID(d.document_id) for d in pack.documents if d.document_id]
+    doc_ids_to_check = []
+    for d in pack.documents:
+        if d.document_id:
+            try:
+                doc_ids_to_check.append(uuid.UUID(d.document_id))
+            except (ValueError, TypeError):
+                pass
     if doc_ids_to_check:
         doc_q = db.query(Document).filter(
             Document.id.in_(doc_ids_to_check),
@@ -443,7 +449,13 @@ def export_visit_pack_pdf(
                 detail="Access denied to one or more referenced medical documents.",
             )
 
-    obs_ids_to_check = [uuid.UUID(o.observation_id) for o in pack.observations if o.observation_id]
+    obs_ids_to_check = []
+    for o in pack.observations:
+        if o.observation_id:
+            try:
+                obs_ids_to_check.append(uuid.UUID(o.observation_id))
+            except (ValueError, TypeError):
+                pass
     if obs_ids_to_check:
         count = db.query(DocumentObservation).filter(
             DocumentObservation.id.in_(obs_ids_to_check),

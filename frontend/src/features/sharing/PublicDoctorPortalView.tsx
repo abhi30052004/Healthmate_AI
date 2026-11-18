@@ -51,7 +51,7 @@ export function PublicDoctorPortalView({ shareToken }: PublicDoctorPortalViewPro
 
   return (
     <div className="bg-[var(--bg)] text-[var(--text)] flex flex-col" data-testid="doctor-portal">
-      <div className="bg-[var(--green-900)] text-white text-xs py-2 px-4 flex items-center justify-between rounded-t-xl">
+      <div className="bg-[var(--green-900)] text-white text-xs py-2 px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-4 rounded-t-xl">
         <div className="flex items-center gap-2">
           <ShieldCheck size={14} aria-hidden="true" />
           <span className="font-semibold">HealthMate AI Clinician Portal</span>

@@ -3,14 +3,30 @@ import { screen, fireEvent } from "@testing-library/react";
 import { renderWithProviders as render } from "../../test/utils";
 import { describe, it, expect, vi } from "vitest";
 import { AppShell } from "./AppShell";
-import {
-  OverviewStub,
-  RecordsStub,
-  MedicinesStub,
-  TimelineStub,
-} from "../../features/stubs/StubViews";
 import type { FamilyProfile, User } from "../../api/client";
 import type { NavTabId } from "./Sidebar";
+
+function OverviewStub({ onNavigate }: { onNavigate?: (tab: NavTabId) => void }) {
+  return (
+    <div>
+      <h1>Today's Health Overview</h1>
+    </div>
+  );
+}
+function RecordsStub() {
+  return (
+    <div>
+      <h1>Health Records & Documents</h1>
+      <p>Health Records Stub View Ready</p>
+    </div>
+  );
+}
+function MedicinesStub() {
+  return <h1>Medicines</h1>;
+}
+function TimelineStub() {
+  return <h1>Timeline & Trends</h1>;
+}
 
 const mockUser: User = {
   id: "user-1",

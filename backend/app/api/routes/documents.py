@@ -1,7 +1,7 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Query, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -10,6 +10,7 @@ from app.core.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.document import (
     DocumentRead,
+    DocumentUpdate,
     ManualEntryCreate,
     ObservationCreate,
     DocumentTextResponse,
@@ -29,6 +30,7 @@ from app.services.document import (
     reprocess_user_document,
     save_and_process_document,
     update_user_document_observation,
+    update_user_document_profile,
     verify_user_document,
 )
 
@@ -45,11 +47,34 @@ async def upload_document(
     file: Annotated[UploadFile, File(...)],
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
-    profile_id: uuid.UUID | None = Query(None, description="Optional family profile ID to associate this document with"),
+    profile_id: Annotated[str | None, Form()] = None,
+    query_profile_id: Annotated[uuid.UUID | None, Query(alias="profile_id")] = None,
 ) -> DocumentRead:
     """Stream upload, validate file signature and size, extract selectable text/OCR, and persist."""
-    document = await save_and_process_document(db, file, current_user, profile_id=profile_id)
+    target_profile_id = query_profile_id
+    if target_profile_id is None and profile_id:
+        try:
+            target_profile_id = uuid.UUID(profile_id)
+        except (ValueError, TypeError):
+            pass
+    document = await save_and_process_document(db, file, current_user, profile_id=target_profile_id)
     return document
+
+
+@router.patch(
+    "/{document_id}",
+    response_model=DocumentRead,
+    status_code=status.HTTP_200_OK,
+    summary="Update document profile assignment or metadata",
+)
+def update_document_metadata(
+    document_id: uuid.UUID,
+    payload: DocumentUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> DocumentRead:
+    """Update profile assignment for a document owned by current authenticated user."""
+    return update_user_document_profile(db, document_id, current_user, profile_id=payload.profile_id)
 
 
 @router.get(

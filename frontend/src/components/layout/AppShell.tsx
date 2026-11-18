@@ -71,45 +71,53 @@ export function AppShell({
   ];
 
   return (
-    <div className="min-h-screen flex bg-[var(--bg)] text-[var(--text)]">
+    <div className="min-h-screen flex bg-[var(--bg)] text-[var(--text)] print:bg-white print:block print:min-h-0">
       {/* Route Loading Bar */}
-      <RouteProgress isNavigating={isNavigating} />
+      <div className="print:hidden">
+        <RouteProgress isNavigating={isNavigating} />
+      </div>
 
       {/* Desktop Collapsible Sidebar */}
-      <Sidebar
-        activeTab={effectiveTab}
-        onTabChange={onTabChange}
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-        simpleMode={simpleMode}
-      />
+      <div className="print:hidden">
+        <Sidebar
+          activeTab={effectiveTab}
+          onTabChange={onTabChange}
+          isCollapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+          simpleMode={simpleMode}
+        />
+      </div>
 
       {/* Main App Layout */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <Topbar
-          user={user}
-          activeProfile={activeProfile}
-          profiles={profiles}
-          onSelectProfile={onSelectProfile}
-          onLogout={onLogout}
-          onOpenMobileMenu={() => setMobileMenuOpen(true)}
-          simpleMode={simpleMode}
-          onToggleSimpleMode={toggleSimpleMode}
-        />
+      <div className="flex-1 flex flex-col min-w-0 print:block print:w-full">
+        <div className="print:hidden">
+          <Topbar
+            user={user}
+            activeProfile={activeProfile}
+            profiles={profiles}
+            onSelectProfile={onSelectProfile}
+            onLogout={onLogout}
+            onOpenMobileMenu={() => setMobileMenuOpen(true)}
+            simpleMode={simpleMode}
+            onToggleSimpleMode={toggleSimpleMode}
+          />
+        </div>
 
         {/* Workspace Body */}
-        <main className="flex-1 p-4 md:p-8 max-w-7xl w-full mx-auto pb-24 lg:pb-8">
+        <main className="flex-1 p-4 md:p-8 max-w-7xl w-full mx-auto pb-24 lg:pb-8 print:p-0 print:m-0 print:max-w-none print:w-full print:block">
           {children}
         </main>
       </div>
 
       {/* Mobile Bottom Navigation */}
-      <MobileNav
-        activeTab={effectiveTab}
-        onTabChange={onTabChange}
-        onOpenMore={() => setMobileMenuOpen(true)}
-        simpleMode={simpleMode}
-      />
+      <div className="print:hidden">
+        <MobileNav
+          activeTab={effectiveTab}
+          onTabChange={onTabChange}
+          onOpenMore={() => setMobileMenuOpen(true)}
+          simpleMode={simpleMode}
+        />
+      </div>
 
       {/* Mobile "More" Full Navigation Drawer */}
       <Dialog

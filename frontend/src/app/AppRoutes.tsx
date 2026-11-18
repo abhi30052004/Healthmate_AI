@@ -41,7 +41,13 @@ export function DashboardRoute() {
 
 export function RecordsRoute() {
   const ctx = useWorkspace();
-  return <HealthRecordsView token={ctx.token} activeProfile={ctx.activeProfile} />;
+  return (
+    <HealthRecordsView
+      token={ctx.token}
+      activeProfile={ctx.activeProfile}
+      profiles={ctx.profiles}
+    />
+  );
 }
 
 export function TrendsRoute() {
@@ -61,7 +67,19 @@ export function AppointmentsRoute() {
     <AppointmentsView
       token={ctx.token}
       activeProfile={ctx.activeProfile}
-      onPrepareVisitPack={() => navigate("/app/visit-pack")}
+      onPrepareVisitPack={(appt) => {
+        if (appt) {
+          navigate("/app/visit-pack", {
+            state: {
+              initialReason: appt.title,
+              initialClinician: appt.provider_name ?? undefined,
+              initialQuestions: appt.questions ?? [],
+            },
+          });
+        } else {
+          navigate("/app/visit-pack");
+        }
+      }}
     />
   );
 }

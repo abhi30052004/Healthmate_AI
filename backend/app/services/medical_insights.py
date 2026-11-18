@@ -152,7 +152,7 @@ def calculate_overview_metrics(
     # 1. Documents
     docs_query = (
         db.query(Document)
-        .filter(Document.owner_id == user.id, Document.processing_status == "extracted")
+        .filter(Document.owner_id == user.id, Document.processing_status.in_(["extracted", "completed"]))
     )
     if profile_id is not None:
         docs_query = docs_query.filter(Document.profile_id == profile_id)
@@ -459,7 +459,7 @@ def get_data_quality_report(
 
     docs_query = (
         db.query(Document)
-        .filter(Document.owner_id == user.id, Document.processing_status == "extracted")
+        .filter(Document.owner_id == user.id, Document.processing_status.in_(["extracted", "completed"]))
     )
     if profile_id is not None:
         docs_query = docs_query.filter(Document.profile_id == profile_id)

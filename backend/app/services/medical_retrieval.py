@@ -191,7 +191,7 @@ def retrieve_medical_evidence(
     # -------------------------------------------------------------------------
     user_docs_query = (
         db.query(Document)
-        .filter(Document.owner_id == user.id, Document.processing_status == "extracted")
+        .filter(Document.owner_id == user.id, Document.processing_status.in_(["extracted", "completed"]))
     )
     if not include_archived:
         user_docs_query = user_docs_query.filter(Document.is_archived.is_(False))

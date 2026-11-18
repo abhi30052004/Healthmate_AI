@@ -20,6 +20,7 @@ vi.mock("../../api/client", async (importOriginal) => {
     updateObservation: vi.fn(),
     deleteObservation: vi.fn(),
     addObservation: vi.fn(),
+    updateDocumentProfile: vi.fn(),
   };
 });
 
@@ -134,6 +135,34 @@ describe("HealthRecordsView (real data)", () => {
     await waitFor(() => expect(api.verifyDocument).toHaveBeenCalledWith("t", "d2"));
   });
 
+  it("enables confirming and verifying a document even with 0 extracted observations", async () => {
+    const zeroObsDoc: DocumentItem = {
+      ...reviewDoc,
+      id: "d-zero",
+      filename: "pre.jpg",
+      observations: [],
+    };
+    vi.mocked(api.listDocuments).mockResolvedValue([zeroObsDoc]);
+    vi.mocked(api.verifyDocument).mockResolvedValue({
+      document_id: "d-zero",
+      is_verified: true,
+      verified_at: "now",
+      observations_verified_count: 0,
+    } as any);
+
+    renderWithProviders(<HealthRecordsView token="t" activeProfile={testProfile} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Review results" }));
+    const panel = await screen.findByRole("dialog", { name: /Review extracted results/i });
+    expect(within(panel).getByText(/No lab test results detected/i)).toBeDefined();
+
+    const confirmBtn = within(panel).getByRole("button", { name: /Confirm & save as verified/i });
+    expect(confirmBtn.hasAttribute("disabled")).toBe(false);
+
+    fireEvent.click(confirmBtn);
+    await waitFor(() => expect(api.verifyDocument).toHaveBeenCalledWith("t", "d-zero"));
+  });
+
   it("saves a correction through the API instead of only changing local state", async () => {
     vi.mocked(api.listDocuments).mockResolvedValue([reviewDoc]);
     vi.mocked(api.updateObservation).mockResolvedValue(obs({ value: "108", is_reviewed: true }) as any);
@@ -200,5 +229,47 @@ describe("HealthRecordsView (real data)", () => {
     await waitFor(() => expect(api.uploadDocument).toHaveBeenCalled());
     expect(vi.mocked(api.uploadDocument).mock.calls[0][1]).toBe(file);
     expect(vi.mocked(api.uploadDocument).mock.calls[0][3]).toBe("prof-1");
+  });
+
+  it("allows reassigning/moving a document to another family profile", async () => {
+    vi.mocked(api.listDocuments).mockResolvedValue([verifiedDoc]);
+    vi.mocked(api.updateDocumentProfile).mockResolvedValue({
+      ...verifiedDoc,
+      profile_id: "prof-2",
+    });
+
+    const profiles = [
+      testProfile,
+      {
+        ...testProfile,
+        id: "prof-2",
+        name: "Jane Doe",
+        relationship: "spouse" as const,
+        is_primary: false,
+      },
+    ];
+
+    renderWithProviders(
+      <HealthRecordsView token="t" activeProfile={testProfile} profiles={profiles} />
+    );
+
+    await screen.findByText("Blood_Chemistry_Panel.pdf");
+    const moveBtn = screen.getByRole("button", {
+      name: "Move Blood_Chemistry_Panel.pdf to another profile",
+    });
+    fireEvent.click(moveBtn);
+
+    const dlg = await screen.findByRole("dialog", { name: "Move record to profile" });
+    expect(within(dlg).getByText(/Jane Doe/i)).toBeDefined();
+
+    const radio = within(dlg).getByLabelText(/Jane Doe/i);
+    fireEvent.click(radio);
+
+    const submitBtn = within(dlg).getByRole("button", { name: "Move record" });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() =>
+      expect(api.updateDocumentProfile).toHaveBeenCalledWith("t", "d1", "prof-2")
+    );
   });
 });

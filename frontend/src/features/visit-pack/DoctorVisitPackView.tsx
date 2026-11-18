@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Share2, FileText, Pill, Activity, Plus, Trash2, Printer, Sparkles, Download, Calendar, Stethoscope } from "lucide-react";
@@ -22,6 +23,9 @@ export interface DoctorVisitPackViewProps {
   token: string;
   activeProfile: FamilyProfile | null;
   onNavigateSharing?: () => void;
+  initialReason?: string;
+  initialClinician?: string;
+  initialQuestions?: string[];
 }
 
 type Period = "3m" | "6m" | "1y" | "all" | "custom";
@@ -41,7 +45,25 @@ const SECTIONS = [
   { id: "documents", label: "Source documents" },
 ] as const;
 
-export function DoctorVisitPackView({ token, activeProfile, onNavigateSharing }: DoctorVisitPackViewProps) {
+export function DoctorVisitPackView({
+  token,
+  activeProfile,
+  onNavigateSharing,
+  initialReason,
+  initialClinician,
+  initialQuestions,
+}: DoctorVisitPackViewProps) {
+  const location = useLocation();
+  const locationState = (location?.state || {}) as {
+    initialReason?: string;
+    initialClinician?: string;
+    initialQuestions?: string[];
+  };
+
+  const defaultReason = initialReason ?? locationState.initialReason ?? "";
+  const defaultClinician = initialClinician ?? locationState.initialClinician ?? "";
+  const defaultQuestions = initialQuestions ?? locationState.initialQuestions ?? [];
+
   const profileId = activeProfile?.id ?? "";
   const [period, setPeriod] = useState<Period>("3m");
   const [from, setFrom] = useState(periodStart("3m"));
@@ -49,9 +71,9 @@ export function DoctorVisitPackView({ token, activeProfile, onNavigateSharing }:
   const [sections, setSections] = useState<string[]>(SECTIONS.map((s) => s.id));
   const [includeUnverified, setIncludeUnverified] = useState(false);
   const [includeSymptoms, setIncludeSymptoms] = useState(true);
-  const [reason, setReason] = useState("");
-  const [clinician, setClinician] = useState("");
-  const [questions, setQuestions] = useState<string[]>([]);
+  const [reason, setReason] = useState(defaultReason);
+  const [clinician, setClinician] = useState(defaultClinician);
+  const [questions, setQuestions] = useState<string[]>(defaultQuestions);
   const [newQuestion, setNewQuestion] = useState("");
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
@@ -162,27 +184,29 @@ export function DoctorVisitPackView({ token, activeProfile, onNavigateSharing }:
 
   return (
     <div className="space-y-8" data-testid="doctor-visit-pack-view">
-      <PageHeader
-        title="Doctor Visit Pack"
-        subtitle="Choose what to include, add your questions, then print, download as PDF, or share a read-only link."
-        actions={
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button variant="outline" size="sm" iconLeft={<Printer size={14} />} onClick={() => window.print()} disabled={!data}>
-              Print
-            </Button>
-            <Button variant="outline" size="sm" iconLeft={<Download size={14} />} onClick={handleExport} loading={exporting} disabled={!data}>
-              Download PDF
-            </Button>
-            {onNavigateSharing && (
-              <Button variant="primary" size="sm" iconLeft={<Share2 size={14} />} onClick={onNavigateSharing}>
-                Share with doctor
+      <div className="print:hidden">
+        <PageHeader
+          title="Doctor Visit Pack"
+          subtitle="Choose what to include, add your questions, then print, download as PDF, or share a read-only link."
+          actions={
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button variant="outline" size="sm" iconLeft={<Printer size={14} />} onClick={() => window.print()} disabled={!data}>
+                Print
               </Button>
-            )}
-          </div>
-        }
-      />
+              <Button variant="outline" size="sm" iconLeft={<Download size={14} />} onClick={handleExport} loading={exporting} disabled={!data}>
+                Download PDF
+              </Button>
+              {onNavigateSharing && (
+                <Button variant="primary" size="sm" iconLeft={<Share2 size={14} />} onClick={onNavigateSharing}>
+                  Share with doctor
+                </Button>
+              )}
+            </div>
+          }
+        />
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 print:block">
         <div className="lg:col-span-1 space-y-5 print:hidden">
           <Card className="p-5 space-y-4">
             <h2 className="text-sm font-display font-semibold">1. What to include</h2>
@@ -291,28 +315,28 @@ export function DoctorVisitPackView({ token, activeProfile, onNavigateSharing }:
           </Card>
         </div>
 
-        <div className="lg:col-span-2">
-          <div className="p-8 rounded-xl bg-white border border-[var(--border)] shadow-1 space-y-6 print:border-none print:shadow-none print:p-0" data-testid="visit-pack-preview">
-            <div className="flex items-start justify-between border-b border-[var(--border)] pb-5">
+        <div className="lg:col-span-2 print:w-full print:max-w-none">
+          <div className="p-8 rounded-xl bg-white border border-[var(--border)] shadow-1 space-y-6 print:border-none print:shadow-none print:p-0 print:space-y-6 print:w-full" data-testid="visit-pack-preview">
+            <div className="flex items-start justify-between border-b border-[var(--border)] pb-5 print:pb-4">
               <div>
-                <span className="text-[10px] uppercase font-bold tracking-wider text-[var(--green-800)] bg-[var(--green-50)] px-2 py-0.5 rounded border border-[var(--green-100)]">
-                  Visit summary
+                <span className="text-[10px] uppercase font-bold tracking-wider text-[var(--green-800)] bg-[var(--green-50)] px-2 py-0.5 rounded border border-[var(--green-100)] print:border-gray-300 print:text-black">
+                  Doctor Visit Summary & Preparation Pack
                 </span>
-                <h2 className="text-2xl font-display font-bold mt-1.5">{activeProfile?.name}</h2>
-                <p className="text-xs text-[var(--muted)]">
-                  Prepared {formatDate(todayISO())}
-                  {from || to ? ` · Records ${from ? `from ${formatDate(from)}` : ""}${to ? ` to ${formatDate(to)}` : ""}` : " · All records"}
+                <h2 className="text-2xl font-display font-bold mt-1.5 print:text-2xl print:text-black">{activeProfile?.name}</h2>
+                <p className="text-xs text-[var(--muted)] print:text-gray-600">
+                  Prepared on {formatDate(todayISO())}
+                  {from || to ? ` · Records ${from ? `from ${formatDate(from)}` : ""}${to ? ` to ${formatDate(to)}` : ""}` : " · All available records"}
                 </p>
                 {(reason || clinician) && (
-                  <p className="text-xs mt-1">
-                    {clinician && <span className="font-semibold">{clinician}</span>}
+                  <p className="text-xs mt-1 print:text-sm print:text-black">
+                    {clinician && <span>Clinician / Clinic: <strong className="font-semibold">{clinician}</strong></span>}
                     {clinician && reason && " · "}
-                    {reason}
+                    {reason && <span>Reason: <strong className="font-semibold">{reason}</strong></span>}
                   </p>
                 )}
               </div>
-              <div className="text-right text-xs text-[var(--muted)]">
-                <p className="font-semibold text-[var(--text)]">HealthMate AI</p>
+              <div className="text-right text-xs text-[var(--muted)] print:text-gray-600">
+                <p className="font-semibold text-[var(--text)] print:text-black text-sm">HealthMate AI</p>
                 <p>{includeUnverified ? "Includes unverified values" : "Verified records only"}</p>
               </div>
             </div>
@@ -327,17 +351,19 @@ export function DoctorVisitPackView({ token, activeProfile, onNavigateSharing }:
             ) : data ? (
               <>
                 {data.medications.length > 0 && sections.includes("medications") && (
-                  <section className="space-y-2">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--green-900)] flex items-center gap-1.5"><Pill size={14} aria-hidden="true" /> Medications</h3>
-                    <ul className="border border-[var(--border)] rounded-lg divide-y divide-[var(--border)] text-xs">
+                  <section className="space-y-2 print:break-inside-avoid">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--green-900)] print:text-black flex items-center gap-1.5">
+                      <Pill size={14} aria-hidden="true" /> Medications
+                    </h3>
+                    <ul className="border border-[var(--border)] rounded-lg divide-y divide-[var(--border)] text-xs print:border-gray-300">
                       {data.medications.map((m) => (
-                        <li key={m.id} className={`p-2.5 flex items-center gap-3 ${excluded.has(m.id) ? "opacity-40" : ""}`}>
-                          {rowCheck(m.id)}
+                        <li key={m.id} className={`p-2.5 flex items-center gap-3 ${excluded.has(m.id) ? "opacity-40 print:hidden" : ""}`}>
+                          <span className="print:hidden">{rowCheck(m.id)}</span>
                           <div className="flex-1">
                             <span className="font-semibold">{m.name}</span>
-                            {m.strength && <span className="text-[var(--muted)] ml-1">{m.strength}</span>}
+                            {m.strength && <span className="text-[var(--muted)] print:text-gray-600 ml-1">{m.strength}</span>}
                           </div>
-                          <span className="text-[var(--muted)]">{[m.dosage_instructions, m.frequency].filter(Boolean).join(" · ")}</span>
+                          <span className="text-[var(--muted)] print:text-gray-600">{[m.dosage_instructions, m.frequency].filter(Boolean).join(" · ")}</span>
                         </li>
                       ))}
                     </ul>
@@ -345,13 +371,15 @@ export function DoctorVisitPackView({ token, activeProfile, onNavigateSharing }:
                 )}
 
                 {data.observations.length > 0 && sections.includes("observations") && (
-                  <section className="space-y-2">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--green-900)] flex items-center gap-1.5"><Activity size={14} aria-hidden="true" /> Results</h3>
-                    <div className="border border-[var(--border)] rounded-lg overflow-x-auto text-xs">
+                  <section className="space-y-2 print:break-inside-avoid">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--green-900)] print:text-black flex items-center gap-1.5">
+                      <Activity size={14} aria-hidden="true" /> Results & Observations
+                    </h3>
+                    <div className="border border-[var(--border)] rounded-lg overflow-x-auto text-xs print:border-gray-300">
                       <table className="w-full text-left">
-                        <thead className="bg-[var(--bg)] text-[var(--muted)] border-b border-[var(--border)]">
+                        <thead className="bg-[var(--bg)] text-[var(--muted)] border-b border-[var(--border)] print:bg-gray-100 print:text-gray-900">
                           <tr>
-                            <th className="p-2 print:hidden" />
+                            <th className="p-2 print:hidden w-8" />
                             <th className="p-2 font-semibold">Test</th>
                             <th className="p-2 font-semibold">Value</th>
                             <th className="p-2 font-semibold">Report range</th>
@@ -361,12 +389,12 @@ export function DoctorVisitPackView({ token, activeProfile, onNavigateSharing }:
                         </thead>
                         <tbody className="divide-y divide-[var(--border)]">
                           {data.observations.map((o) => (
-                            <tr key={o.observation_id} className={excluded.has(o.observation_id) ? "opacity-40" : ""}>
-                              <td className="p-2">{rowCheck(o.observation_id)}</td>
+                            <tr key={o.observation_id} className={`${excluded.has(o.observation_id) ? "opacity-40 print:hidden" : ""} print:break-inside-avoid`}>
+                              <td className="p-2 print:hidden">{rowCheck(o.observation_id)}</td>
                               <td className="p-2 font-medium">{o.test_name}</td>
                               <td className="p-2 font-bold tabular-nums">{o.value} {o.unit}</td>
-                              <td className="p-2 text-[var(--muted)]">{o.reference_range || "—"}</td>
-                              <td className="p-2 text-[var(--muted)]">{formatDate(o.clinical_date)}</td>
+                              <td className="p-2 text-[var(--muted)] print:text-gray-600">{o.reference_range || "—"}</td>
+                              <td className="p-2 text-[var(--muted)] print:text-gray-600">{formatDate(o.clinical_date)}</td>
                               <td className="p-2">{o.is_verified ? "Verified" : <span className="text-[var(--warning)] font-semibold">Unverified</span>}</td>
                             </tr>
                           ))}
@@ -377,12 +405,12 @@ export function DoctorVisitPackView({ token, activeProfile, onNavigateSharing }:
                 )}
 
                 {data.trends.length > 0 && sections.includes("trends") && (
-                  <section className="space-y-2">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--green-900)]">Recorded changes</h3>
+                  <section className="space-y-2 print:break-inside-avoid">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--green-900)] print:text-black">Recorded changes</h3>
                     <ul className="text-xs space-y-1.5">
                       {data.trends.map((t) => (
-                        <li key={t.test_name} className={`flex items-start gap-2 ${excluded.has(`trend:${t.test_name}`) ? "opacity-40" : ""}`}>
-                          {rowCheck(`trend:${t.test_name}`)}
+                        <li key={t.test_name} className={`flex items-start gap-2 ${excluded.has(`trend:${t.test_name}`) ? "opacity-40 print:hidden" : ""}`}>
+                          <span className="print:hidden">{rowCheck(`trend:${t.test_name}`)}</span>
                           <span><span className="font-semibold">{t.test_name}:</span> {t.change_description}</span>
                         </li>
                       ))}
@@ -391,13 +419,15 @@ export function DoctorVisitPackView({ token, activeProfile, onNavigateSharing }:
                 )}
 
                 {data.appointments.length > 0 && sections.includes("care_schedule") && (
-                  <section className="space-y-2">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--green-900)] flex items-center gap-1.5"><Calendar size={14} aria-hidden="true" /> Appointments</h3>
+                  <section className="space-y-2 print:break-inside-avoid">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--green-900)] print:text-black flex items-center gap-1.5">
+                      <Calendar size={14} aria-hidden="true" /> Appointments
+                    </h3>
                     <ul className="text-xs space-y-1">
                       {data.appointments.map((a) => (
-                        <li key={a.id} className={`flex items-start gap-2 ${excluded.has(a.id) ? "opacity-40" : ""}`}>
-                          {rowCheck(a.id)}
-                          <span>{formatDate(a.scheduled_at)}: {a.title}{a.provider_name ? ` (${a.provider_name})` : ""}</span>
+                        <li key={a.id} className={`flex items-start gap-2 ${excluded.has(a.id) ? "opacity-40 print:hidden" : ""}`}>
+                          <span className="print:hidden">{rowCheck(a.id)}</span>
+                          <span>{formatDate(a.scheduled_at)}: <strong className="font-semibold">{a.title}</strong>{a.provider_name ? ` (${a.provider_name})` : ""}{a.location ? ` - ${a.location}` : ""}</span>
                         </li>
                       ))}
                     </ul>
@@ -405,13 +435,15 @@ export function DoctorVisitPackView({ token, activeProfile, onNavigateSharing }:
                 )}
 
                 {includeSymptoms && symptoms.length > 0 && (
-                  <section className="space-y-2">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--green-900)] flex items-center gap-1.5"><Stethoscope size={14} aria-hidden="true" /> Symptoms I noted</h3>
+                  <section className="space-y-2 print:break-inside-avoid">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--green-900)] print:text-black flex items-center gap-1.5">
+                      <Stethoscope size={14} aria-hidden="true" /> Symptoms I noted
+                    </h3>
                     <ul className="text-xs space-y-1">
                       {symptoms.map((s) => (
                         <li key={s.id}>
-                          <span className="font-semibold">{formatDate(s.occurred_at)}:</span> {s.title} <span className="text-[var(--muted)]">({s.severity})</span>
-                          {s.notes ? <span className="text-[var(--muted)]"> {s.notes}</span> : null}
+                          <span className="font-semibold">{formatDate(s.occurred_at)}:</span> {s.title} <span className="text-[var(--muted)] print:text-gray-600">({s.severity})</span>
+                          {s.notes ? <span className="text-[var(--muted)] print:text-gray-600"> — {s.notes}</span> : null}
                         </li>
                       ))}
                     </ul>
@@ -419,16 +451,18 @@ export function DoctorVisitPackView({ token, activeProfile, onNavigateSharing }:
                 )}
 
                 {(questions.length > 0 || suggested.length > 0) && (
-                  <section className="space-y-2">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--green-900)] flex items-center gap-1.5"><FileText size={14} aria-hidden="true" /> Questions for the doctor</h3>
+                  <section className="space-y-2 print:break-inside-avoid">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--green-900)] print:text-black flex items-center gap-1.5">
+                      <FileText size={14} aria-hidden="true" /> Questions for the doctor
+                    </h3>
                     <ul className="list-disc pl-5 text-xs space-y-1 leading-relaxed">
                       {questions.map((q, i) => (
-                        <li key={`m${i}`}>{q}</li>
+                        <li key={`m${i}`} className="font-medium">{q}</li>
                       ))}
                       {suggested.map((q) => (
-                        <li key={q.question} className={excluded.has(`q:${q.question}`) ? "opacity-40" : ""}>
-                          <label className="inline-flex items-center gap-2 -ml-5">
-                            {rowCheck(`q:${q.question}`)}
+                        <li key={q.question} className={`${excluded.has(`q:${q.question}`) ? "opacity-40 print:hidden" : ""}`}>
+                          <label className="inline-flex items-center gap-2 -ml-5 print:ml-0">
+                            <span className="print:hidden">{rowCheck(`q:${q.question}`)}</span>
                             <span>{q.question}</span>
                           </label>
                         </li>
@@ -445,7 +479,7 @@ export function DoctorVisitPackView({ token, activeProfile, onNavigateSharing }:
               </>
             ) : null}
 
-            <div className="pt-4 border-t border-[var(--border)] text-[10px] text-[var(--muted)] leading-tight text-center">
+            <div className="pt-4 border-t border-[var(--border)] text-[10px] text-[var(--muted)] print:text-gray-600 leading-tight text-center">
               {data?.disclaimer ?? "This summary is assembled from the patient's own records for discussion with a clinician. HealthMate AI does not diagnose or prescribe."}
             </div>
           </div>

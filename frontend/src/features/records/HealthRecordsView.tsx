@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { FileText, Search, Trash2, Download, RefreshCw, PencilLine, Loader2 } from "lucide-react";
+import { FileText, Search, Trash2, Download, RefreshCw, PencilLine, Loader2, UserCheck } from "lucide-react";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
@@ -19,6 +19,7 @@ import {
   downloadDocument,
   listDocuments,
   reprocessDocument,
+  updateDocumentProfile,
   uploadDocument,
   type DocumentItem,
   type FamilyProfile,
@@ -28,6 +29,7 @@ import { errorMessage, formatDate } from "../../lib/dates";
 export interface HealthRecordsViewProps {
   token: string;
   activeProfile: FamilyProfile | null;
+  profiles?: FamilyProfile[];
 }
 
 type UiState = "processing" | "needs_review" | "verified" | "failed";
@@ -40,7 +42,7 @@ export function documentUiState(doc: DocumentItem): UiState {
   return "needs_review";
 }
 
-export function HealthRecordsView({ token, activeProfile }: HealthRecordsViewProps) {
+export function HealthRecordsView({ token, activeProfile, profiles }: HealthRecordsViewProps) {
   const queryClient = useQueryClient();
   const profileId = activeProfile?.id ?? "";
   const key = profileQueryKeys.documents(profileId);
@@ -52,6 +54,8 @@ export function HealthRecordsView({ token, activeProfile }: HealthRecordsViewPro
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   const [deleting, setDeleting] = useState<DocumentItem | null>(null);
+  const [movingDoc, setMovingDoc] = useState<DocumentItem | null>(null);
+  const [targetProfileId, setTargetProfileId] = useState<string>("");
 
   const docsQuery = useQuery({
     queryKey: key,
@@ -107,6 +111,28 @@ export function HealthRecordsView({ token, activeProfile }: HealthRecordsViewPro
       refresh();
     },
     onError: (err) => toast.error(errorMessage(err, "Couldn't retry processing.")),
+  });
+
+  const moveMutation = useMutation({
+    mutationFn: ({ doc, newProfileId }: { doc: DocumentItem; newProfileId: string }) =>
+      updateDocumentProfile(token, doc.id, newProfileId),
+    onSuccess: async (_, variables) => {
+      const target = profiles?.find((p) => p.id === variables.newProfileId);
+      toast.success(
+        target
+          ? `Record moved to ${target.name}'s profile.`
+          : "Record moved successfully."
+      );
+      setMovingDoc(null);
+      setTargetProfileId("");
+      await refresh();
+      queryClient.invalidateQueries({ queryKey: profileQueryKeys.trends(profileId) });
+      if (variables.newProfileId) {
+        queryClient.invalidateQueries({ queryKey: profileQueryKeys.documents(variables.newProfileId) });
+        queryClient.invalidateQueries({ queryKey: profileQueryKeys.trends(variables.newProfileId) });
+      }
+    },
+    onError: (err) => toast.error(errorMessage(err, "Couldn't move this record.")),
   });
 
   const filtered = documents.filter((doc) => {
@@ -245,6 +271,22 @@ export function HealthRecordsView({ token, activeProfile }: HealthRecordsViewPro
                         {state === "needs_review" ? "Review results" : "View record"}
                       </Button>
                     )}
+                    {profiles && profiles.length > 1 && (
+                      <button
+                        type="button"
+                        aria-label={`Move ${doc.filename} to another profile`}
+                        title="Move to another family member"
+                        onClick={() => {
+                          setMovingDoc(doc);
+                          const currentId = doc.profile_id || activeProfile?.id || "";
+                          const other = profiles.find((p) => p.id !== currentId);
+                          setTargetProfileId(other?.id ?? "");
+                        }}
+                        className="p-2 rounded-md text-[var(--muted)] hover:text-[var(--green-800)] hover:bg-[var(--green-50)]"
+                      >
+                        <UserCheck size={15} />
+                      </button>
+                    )}
                     {!isManual && (
                       <button
                         type="button"
@@ -304,6 +346,82 @@ export function HealthRecordsView({ token, activeProfile }: HealthRecordsViewPro
           <Button variant="outline" onClick={() => setDeleting(null)}>Cancel</Button>
           <Button variant="danger" loading={deleteMutation.isPending} onClick={() => deleting && deleteMutation.mutate(deleting)}>
             Delete record
+          </Button>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={!!movingDoc}
+        onClose={() => {
+          setMovingDoc(null);
+          setTargetProfileId("");
+        }}
+        maxWidth="sm"
+        title="Move record to profile"
+        description={`Choose which family member's profile "${movingDoc?.filename}" should belong to.`}
+      >
+        <div className="space-y-2 my-4">
+          {profiles?.map((p) => {
+            const isSelected = targetProfileId === p.id;
+            const currentProfileId = movingDoc?.profile_id || activeProfile?.id;
+            const isCurrent = currentProfileId === p.id;
+            return (
+              <label
+                key={p.id}
+                className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
+                  isSelected
+                    ? "border-[var(--green-700)] bg-[var(--green-50)]"
+                    : "border-[var(--border)] bg-white hover:bg-[var(--background)]"
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="radio"
+                    name="target-profile"
+                    value={p.id}
+                    checked={isSelected}
+                    onChange={() => setTargetProfileId(p.id)}
+                    className="accent-[var(--green-700)]"
+                  />
+                  <div>
+                    <p className="text-xs font-semibold text-[var(--text)]">
+                      {p.name} {p.is_primary && <span className="text-[10px] text-[var(--muted)] font-normal">(Primary)</span>}
+                    </p>
+                    <p className="text-[11px] text-[var(--muted)]">
+                      {p.relationship ? p.relationship.charAt(0).toUpperCase() + p.relationship.slice(1) : "Self"}
+                    </p>
+                  </div>
+                </div>
+                {isCurrent && (
+                  <span className="text-[10px] font-semibold text-[var(--muted)] bg-[var(--border)] px-1.5 py-0.5 rounded">
+                    Current
+                  </span>
+                )}
+              </label>
+            );
+          })}
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              setMovingDoc(null);
+              setTargetProfileId("");
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            disabled={!targetProfileId || targetProfileId === (movingDoc?.profile_id || activeProfile?.id)}
+            loading={moveMutation.isPending}
+            onClick={() => {
+              if (movingDoc && targetProfileId) {
+                moveMutation.mutate({ doc: movingDoc, newProfileId: targetProfileId });
+              }
+            }}
+          >
+            Move record
           </Button>
         </div>
       </Dialog>

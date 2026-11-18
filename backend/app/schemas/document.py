@@ -40,6 +40,10 @@ class ObservationUpdate(BaseModel):
     is_reviewed: bool = True
 
 
+class DocumentUpdate(BaseModel):
+    profile_id: uuid.UUID | None = None
+
+
 class DocumentBase(BaseModel):
     filename: str
     mime_type: str

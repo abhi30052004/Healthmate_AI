@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import HTTPException, status
 from sqlalchemy import or_, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.models.care import AppointmentRecord, FollowUpTask, MedicationRecord
 from app.models.document import Document
@@ -485,7 +485,7 @@ def process_due_reminders(
 
     query = (
         db.query(Reminder)
-        .options(joinedload(Reminder.user))
+        .options(selectinload(Reminder.user))
         .filter(
             Reminder.delivery_status == "pending",
             Reminder.is_enabled == True,
@@ -500,7 +500,7 @@ def process_due_reminders(
     try:
         bind = db.get_bind()
         if bind.dialect.name == "postgresql":
-            query = query.with_for_update(skip_locked=True)
+            query = query.with_for_update(of=Reminder, skip_locked=True)
     except Exception as exc:
         logger.debug("Row-level lock skip_locked not applicable: %s", exc)
 

@@ -234,7 +234,7 @@ export function AssistantView({ token, activeProfile }: { token: string; activeP
               e.preventDefault();
               send();
             }}
-            className="sticky bottom-4 z-20 flex items-center gap-2 p-2 bg-white/95 backdrop-blur-md rounded-2xl border border-[var(--border)] shadow-lg"
+            className="sticky bottom-20 lg:bottom-4 z-20 flex items-center gap-2 p-2 bg-white/95 backdrop-blur-md rounded-2xl border border-[var(--border)] shadow-lg"
           >
             <Input
               aria-label="Ask a question about your records"

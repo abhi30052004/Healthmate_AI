@@ -39,6 +39,7 @@ export function ExtractionReviewPanel({ token, document: doc, onClose, onChanged
   const [adding, setAdding] = useState(false);
   const [newItem, setNewItem] = useState({ test_name: "", value: "", unit: "", reference_range: "" });
   const [tab, setTab] = useState<SourceTab>(isManual ? "text" : "original");
+  const [mobileTab, setMobileTab] = useState<"results" | "source">("results");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
@@ -144,7 +145,11 @@ export function ExtractionReviewPanel({ token, document: doc, onClose, onChanged
     setVerifying(true);
     try {
       await verifyDocument(token, doc.id);
-      toast.success("Marked as verified. These values now appear in your trends.");
+      toast.success(
+        items.length > 0
+          ? "Marked as verified. These values now appear in your trends."
+          : "Document marked as verified."
+      );
       onChanged();
       onClose();
     } catch (err) {
@@ -180,9 +185,38 @@ export function ExtractionReviewPanel({ token, document: doc, onClose, onChanged
           </button>
         </div>
 
+        <div className="flex md:hidden border-b border-[var(--border)] bg-[var(--bg)] px-3 py-2 gap-2 shrink-0" role="tablist" aria-label="Review views">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobileTab === "results"}
+            onClick={() => setMobileTab("results")}
+            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold text-center transition-colors ${
+              mobileTab === "results"
+                ? "bg-white text-[var(--green-900)] shadow-sm border border-[var(--border)]"
+                : "text-[var(--muted)] hover:text-[var(--text)]"
+            }`}
+          >
+            Results ({items.length})
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobileTab === "source"}
+            onClick={() => setMobileTab("source")}
+            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold text-center transition-colors ${
+              mobileTab === "source"
+                ? "bg-white text-[var(--green-900)] shadow-sm border border-[var(--border)]"
+                : "text-[var(--muted)] hover:text-[var(--text)]"
+            }`}
+          >
+            Original Document
+          </button>
+        </div>
+
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
           {/* Source */}
-          <div className="w-full md:w-1/2 border-b md:border-b-0 md:border-r border-[var(--border)] bg-[var(--bg)] flex flex-col min-h-[240px]">
+          <div className={`w-full md:w-1/2 border-b md:border-b-0 md:border-r border-[var(--border)] bg-[var(--bg)] flex-col min-h-[240px] ${mobileTab === "source" ? "flex" : "hidden md:flex"}`}>
             <div className="flex items-center gap-1 p-3 border-b border-[var(--border)]">
               <FileText size={14} className="text-[var(--green-700)] mr-1" aria-hidden="true" />
               {!isManual && (
@@ -229,7 +263,7 @@ export function ExtractionReviewPanel({ token, document: doc, onClose, onChanged
           </div>
 
           {/* Results */}
-          <div className="w-full md:w-1/2 p-5 overflow-y-auto space-y-4">
+          <div className={`w-full md:w-1/2 p-4 md:p-5 overflow-y-auto space-y-4 ${mobileTab === "results" ? "block" : "hidden md:block"}`}>
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5">
                 <ShieldCheck size={14} className="text-[var(--green-600)]" aria-hidden="true" />
@@ -258,9 +292,12 @@ export function ExtractionReviewPanel({ token, document: doc, onClose, onChanged
             )}
 
             {items.length === 0 && !adding && (
-              <p className="text-xs text-[var(--muted)] p-4 border border-dashed border-[var(--border)] rounded-lg">
-                No results were found in this file. Use “Add missed result” to enter them from the original.
-              </p>
+              <div className="p-4 border border-dashed border-[var(--border)] rounded-lg bg-[var(--bg)] space-y-1.5">
+                <p className="text-xs font-semibold text-[var(--text)]">No lab test results detected</p>
+                <p className="text-xs text-[var(--muted)] leading-relaxed">
+                  Prescriptions, clinical notes, or documents without numeric lab tests won&apos;t have automated results. You can confirm this document as verified directly below, or click <strong>Add missed result</strong> to record specific findings.
+                </p>
+              </div>
             )}
 
             <ul className="space-y-3">
@@ -330,13 +367,22 @@ export function ExtractionReviewPanel({ token, document: doc, onClose, onChanged
           </div>
         </div>
 
-        <div className="p-4 border-t border-[var(--border)] bg-white flex items-center justify-between gap-4">
-          <Button variant="outline" size="sm" onClick={onClose}>
+        <div className="p-3 sm:p-4 border-t border-[var(--border)] bg-white flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+          <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={onClose}>
             {doc.is_verified ? "Close" : "Review later"}
           </Button>
           {!doc.is_verified && (
-            <Button variant="verified" size="md" loading={verifying} disabled={items.length === 0} iconLeft={<CheckCircle2 size={16} />} onClick={confirmAll}>
-              Confirm & save as verified ({items.length})
+            <Button
+              variant="verified"
+              size="md"
+              className="w-full sm:w-auto"
+              loading={verifying}
+              iconLeft={<CheckCircle2 size={16} />}
+              onClick={confirmAll}
+            >
+              {items.length > 0
+                ? `Confirm & save as verified (${items.length})`
+                : "Confirm & save as verified"}
             </Button>
           )}
         </div>

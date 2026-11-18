@@ -95,6 +95,10 @@ async def save_and_process_document(
     if profile_id is not None:
         from app.services.family_profile import verify_profile_access
         verify_profile_access(db, current_user, profile_id)
+    else:
+        from app.services.family_profile import get_or_create_primary_profile
+        primary = get_or_create_primary_profile(db, current_user)
+        profile_id = primary.id
     settings = get_settings()
     max_size = settings.max_upload_size_bytes
     storage_root = Path(settings.document_storage_dir).resolve()
@@ -483,16 +487,18 @@ def verify_user_document(
     """Confirm user review of extracted text and observations."""
     doc = get_user_document(db, document_id, current_user)
 
-    if doc.processing_status != "extracted":
+    if doc.processing_status in ("queued", "processing", "uploaded"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
                 f"Cannot verify document in status '{doc.processing_status}'. "
-                "Document must be successfully extracted before verification."
+                "Document must finish processing before verification."
             ),
         )
 
     doc.is_verified = True
+    if doc.processing_status in ("failed", "ocr_required"):
+        doc.processing_status = "extracted"
     now = datetime.now(timezone.utc)
     doc.verified_at = now
 
@@ -555,10 +561,15 @@ def _build_observation(
 
 def create_manual_entry(db: Session, current_user: User, payload: ManualEntryCreate) -> Document:
     """Create a verified, file-less record from user-entered values (labs, vitals, etc.)."""
-    if payload.profile_id is not None:
+    effective_profile_id = payload.profile_id
+    if effective_profile_id is not None:
         from app.services.family_profile import verify_profile_access
 
-        verify_profile_access(db, current_user, payload.profile_id)
+        verify_profile_access(db, current_user, effective_profile_id)
+    else:
+        from app.services.family_profile import get_or_create_primary_profile
+        primary = get_or_create_primary_profile(db, current_user)
+        effective_profile_id = primary.id
 
     doc_id = uuid.uuid4()
     when = payload.entry_date.isoformat()
@@ -569,7 +580,7 @@ def create_manual_entry(db: Session, current_user: User, payload: ManualEntryCre
     document = Document(
         id=doc_id,
         owner_id=current_user.id,
-        profile_id=payload.profile_id,
+        profile_id=effective_profile_id,
         filename=f"Manual entry - {label} - {payload.entry_date.isoformat()}",
         storage_key=f"manual/{doc_id.hex}",
         mime_type=MANUAL_MIME_TYPE,
@@ -630,3 +641,20 @@ def delete_document_observation(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Observation not found.")
     db.delete(obs)
     db.commit()
+
+
+def update_user_document_profile(
+    db: Session,
+    document_id: uuid.UUID,
+    current_user: User,
+    profile_id: uuid.UUID | None,
+) -> Document:
+    """Reassign a document to a different family profile owned by the user."""
+    doc = get_user_document(db, document_id, current_user)
+    if profile_id is not None:
+        from app.services.family_profile import verify_profile_access
+        verify_profile_access(db, current_user, profile_id)
+    doc.profile_id = profile_id
+    db.commit()
+    db.refresh(doc)
+    return doc
